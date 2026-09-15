@@ -97,11 +97,26 @@ func (s *uiServer) pulls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := &prPage{Kind: "list", Title: "pull requests", All: r.URL.Query().Get("all") == "1"}
+	open := 0
+	for i := range c.prs {
+		if c.prs[i].State == collab.StateOpen {
+			open++
+		}
+	}
+	// an empty "open" list next to merged work is confusing: fall back to all
+	if open == 0 && len(c.prs) > 0 && !p.All {
+		p.All = true
+		p.Error = ""
+		p.Body = "no open pull requests; showing merged and closed ones"
+	}
 	for i := range c.prs {
 		if !p.All && c.prs[i].State != collab.StateOpen {
 			continue
 		}
 		p.Rows = append(p.Rows, s.row(c, &c.prs[i]))
+	}
+	if len(c.prs) == 0 {
+		p.Body = "no pull requests yet: push a branch and open one here, or with secretgit pr open"
 	}
 	s.renderPR(w, p)
 }
@@ -237,7 +252,8 @@ document.addEventListener("click", function (ev) {
 <h3>Pull requests <a href="/pulls/new" style="font-weight:400;font-size:13px">+ new</a> <span class="muted" style="font-weight:400;font-size:13px">· {{if .All}}<a href="/pulls">open only</a>{{else}}<a href="/pulls?all=1">show all</a>{{end}}</span></h3>
 <table>{{range .Rows}}<tr><td>#{{.Number}}</td><td><a href="/pull/{{.ID}}">{{.Title}}</a><br><span class="muted">{{.Head}} → {{.Base}} · {{.Author}} · {{.Date}}</span></td>
 <td><span class="pill {{.State}}">{{.State}}</span></td><td>{{range .Approved}}<span class="pill success">✓ {{.}}</span> {{end}}{{range .Changes}}<span class="pill failure">✗ {{.}}</span> {{end}}</td>
-<td>{{range .Checks}}<span class="pill {{.Status}}" title="{{.Summary}}">{{.Name}}</span> {{end}}</td></tr>{{else}}<tr><td class="muted">nothing here</td></tr>{{end}}</table>
+<td>{{range .Checks}}<span class="pill {{.Status}}" title="{{.Summary}}">{{.Name}}</span> {{end}}</td></tr>{{end}}</table>
+{{if .Body}}<p class="muted" style="margin-top:10px">{{.Body}}</p>{{end}}
 {{end}}
 {{if eq .Kind "new"}}
 <h3>New pull request</h3>
