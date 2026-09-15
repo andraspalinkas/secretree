@@ -1,0 +1,12 @@
+# build outputs
+/dist/
+/bin/
+# editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+# never commit key material or vault test fixtures with keys
+*.age-key
+*.key
+recovery-kit*
