@@ -1,0 +1,32 @@
+# secretgit's own source is public, so it can use hosted CI. Vaults created
+# with it never should; see docs/vision.md, layer 4.
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: git config --global user.name ci && git config --global user.email ci@example.com
+      - run: go vet ./...
+      - run: go test ./...
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: goreleaser/goreleaser-action@v6
+        with: { args: release --clean }
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }

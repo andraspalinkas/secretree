@@ -169,3 +169,38 @@ ledger entry.
 `secretgit ui` serves the mirror on 127.0.0.1 with forge-shaped URLs. A
 non-loopback listen address is allowed for private networks and prints a
 warning. Writes (PRs, reviews) will come with the collaboration layer.
+
+## 0021 — Pull requests are events in a git ref, merged by union — accepted (2026-09-15)
+
+`refs/secretgit/collab` holds signed JSON events with unique file names.
+No sequence numbers to allocate, no server: concurrent writers merge with
+`git merge-tree`, and the helper's push rejection only ever means "fetch
+and merge the union", which the `pr` commands do automatically (three
+attempts). PR numbers are advisory; the directory id carries a random
+suffix so simultaneous opens cannot collide.
+
+## 0022 — Policy is enforced by clients and verifiable by clients — accepted (2026-09-15)
+
+`secretgit pr merge` refuses to merge without the approvals and green
+checks that `.secretgit/policy.json` requires, counting only reviews and
+checks of the *current* head commit. Because those are signed events,
+any client can recompute the verdict. A rogue client can still push a
+merge commit directly with git; that is visible (no matching state event,
+or a state event whose inputs do not satisfy policy) rather than
+preventable, and preventing it is a host-side branch protection concern.
+
+## 0023 — The runner is a plain agent, not a workflow engine — accepted (2026-09-15)
+
+The runner executes what the repository already has (`.secretgit/ci`,
+`make ci`, or a command) in a detached worktree and records one signed
+check with the log. Matrix builds, caching and orchestration belong to
+the pipeline script or to `act`; the runner's job is to be the place
+where the key is. Logs are events in the collab ref and therefore
+encrypted at rest on the host.
+
+## 0024 — Deploy is pull-based and gated on a signed check — accepted (2026-09-15)
+
+The deploy agent runs on the target, exports a branch tip with
+`git archive` (no `.git` on the server), and records a signed deploy
+event. It refuses commits without the required green check. CI holds no
+production credentials; the target needs no inbound access.

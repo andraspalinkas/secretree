@@ -16,8 +16,8 @@ machine that holds the key. How that works, layer by layer, is in
 
 ## Status
 
-Layers 1 and 2 of five are built (Go, one static binary), plus the first
-pieces of the developer-experience layer:
+All five planned layers have a working first version (Go, one static
+binary, integration-tested against real repositories):
 
 - **Vault**: `init`, `backup`, `verify`, `restore`, `status`, `schedule`.
   Frozen v1 format ([docs/vault-format.md](docs/vault-format.md)), mandatory
@@ -27,17 +27,18 @@ pieces of the developer-experience layer:
   a remote helper. Several writers; conflicts are ordinary git conflicts.
 - **Team**: `join` on a new device, `member add|remove|list`, per-device keys,
   revocation that keeps the past verifiable and closes the future.
-- **Share**: `share <path>` or `share --diff a..b` produces a self-contained
-  encrypted HTML page that decrypts in the browser with a key from the link
-  fragment. Every share lands in the signed **disclosure ledger** (`ledger`).
-- **Local UI**: `ui` serves a code browser (tree, blob with line anchors,
-  blame, history, commit diffs, search) over the vault mirror at
-  `http://127.0.0.1:7391`; `link <path>:<line>` prints a permalink.
+- **Collaboration**: `pr open|list|show|comment|approve|request-changes|merge|close`,
+  `.secretgit/policy.json` (required approvals and checks) enforced from signed
+  events, a local UI (`ui`) with PR pages, code browsing, blame, search and
+  permalinks (`link`), encrypted `share` pages and a signed disclosure `ledger`.
+- **Runner and deploy**: `runner` executes the repository's own pipeline on a
+  key-holding machine and records signed checks with logs; `deploy-agent`
+  ships a branch to a target host when its check is green.
 
-Not yet: pull requests and reviews as encrypted git data, the runner and
-deploy agents, IDE extension, S3/rclone targets, Linux/Windows key stores
-(Linux uses a 0600 file under `~/.config/secretgit`). Roadmap in
-[docs/vision.md](docs/vision.md).
+Not yet: IDE extension, S3/rclone targets, Linux/Windows key stores (Linux
+uses a 0600 file under `~/.config/secretgit`), re-encrypting history for
+members added later, notification relay. Roadmap in [docs/vision.md](docs/vision.md).
+Website: [site/index.html](site/index.html).
 
 ## Quick start
 
@@ -60,6 +61,14 @@ secretgit clone git@gitlab.com:you/myapp-vault.git myapp
 # look at code the way you are used to
 secretgit ui --open                            # http://127.0.0.1:7391/blob/main/src/x.go#L10
 secretgit link src/x.go:10
+
+# reviews, CI and deploys
+secretgit policy --approvals 1 --checks ci     # commit .secretgit/policy.json on main
+secretgit pr open --title "Add retry" --head feature/retry
+secretgit pr approve 1 -m "lgtm"               # from another device
+secretgit runner                               # CI agent on a machine you own
+secretgit pr merge 1
+secretgit deploy-agent --to /srv/app --cmd "systemctl restart app"   # on the target host
 
 # show something to someone without a key
 secretgit share src/x.go --expires 3d --note "for the auditor"
@@ -117,9 +126,13 @@ secretgit clone           git clone through the helper (imports a recovery kit i
 secretgit install-helper  symlink git-remote-secretgit next to the binary
 secretgit join            new device: own keys + a join request for a member to approve
 secretgit member          list | add | remove | request
+secretgit pr              open | list | show | comment | approve | request-changes | merge | close
+secretgit policy          write .secretgit/policy.json (required approvals, required checks)
+secretgit runner          CI agent: run .secretgit/ci (or make ci, or --cmd) per new commit, record signed checks
+secretgit deploy-agent    pull-based CD: export a branch to a directory when its check is green
 secretgit share           encrypted, self-contained HTML snapshot of a file or diff
 secretgit ledger          every deliberate disclosure, signed and hash-chained
-secretgit ui              local code browser over the vault mirror
+secretgit ui              local code browser and pull requests over the vault mirror
 secretgit link            permalink into the local UI
 ```
 
@@ -131,6 +144,8 @@ secretgit link            permalink into the local UI
 - [Threat model](docs/threat-model.md) — what the tool does *not* protect against.
 - [Vault format v1](docs/vault-format.md) — what lands on the remote and why.
 - [Restore by hand](docs/restore-by-hand.md) — the disaster path, no secretgit needed.
+- [Integrations](docs/integrations.md) — dependency updates, scanners, LLM
+  review and previews as jobs on your runner.
 - [Decisions](docs/decisions.md) — architectural decision log.
 
 ## License

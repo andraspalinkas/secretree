@@ -1,0 +1,31 @@
+# goreleaser configuration: one static binary per platform, checksums,
+# and an archive that also carries the docs so an offline restore has them.
+version: 2
+project_name: secretgit
+builds:
+  - main: ./cmd/secretgit
+    binary: secretgit
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w -X secretgit/internal/app.Version={{.Version}}"]
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: [LICENSE, README.md, docs/*]
+checksum:
+  name_template: checksums.txt
+release:
+  draft: true
+brews:
+  - repository:
+      owner: OWNER
+      name: homebrew-tap
+    homepage: https://github.com/OWNER/secretgit
+    description: "Private git: encrypted repositories on any host, with reviews and CI intact"
+    license: MIT
+    install: |
+      bin.install "secretgit"
+      bin.install_symlink "secretgit" => "git-remote-secretgit"

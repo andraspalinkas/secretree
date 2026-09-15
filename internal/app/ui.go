@@ -457,5 +457,5 @@ var uiTmpl = template.Must(template.New("ui").Parse(`<!doctype html>
 {{if eq .Kind "commit"}}<div class="diff">{{.Diff}}</div>{{end}}
 {{if eq .Kind "search"}}<h3>{{if .Query}}results for “{{.Query}}” in {{.Ref}}{{else}}search{{end}}</h3><table>{{range .Hits}}<tr><td><a href="{{.URL}}">{{.Path}}:{{.Line}}</a></td><td><code>{{.Text}}</code></td></tr>{{end}}</table>{{end}}
 </main>
-<script>if(location.hash){var e=document.getElementById(location.hash.slice(1));e&&e.scrollIntoView({block:"center"})}</script>
+<script>if(location.hash&&self===top){var e=document.getElementById(location.hash.slice(1));e&&e.scrollIntoView({block:"center"})}</script>
 `))

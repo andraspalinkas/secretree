@@ -293,6 +293,21 @@ key. The key travels in the link fragment (`#AGE-SECRET-KEY-1…`), which
 browsers never send to servers, or by another channel. The page is safe to
 host anywhere.
 
+## 9.3 Collaboration ref
+
+Pull requests, reviews, checks and deployments are ordinary git objects on
+the ref `refs/secretgit/collab`, which the helper syncs like any branch, so
+they are encrypted inside bundles and never appear on the remote in the
+clear. Tree layout: `pr/<number>-<rand>/<unix>-<eventid>.json` plus a
+`.json.sig` OpenSSH signature (namespace `secretgit-v1`) by the acting
+device; repository-level events (checks, deploys) live under `repo/`.
+File names are unique, so concurrent writers merge as a tree union
+(`git merge-tree`). Readers verify every signature against the signer
+roster *as of the event's timestamp*, so events by since-revoked members
+remain valid. Policy is `.secretgit/policy.json` at the base branch
+(`required_approvals`, `required_checks`); a merge that violates it is
+detectable by every client because approvals and checks are signed.
+
 ## 10. Local state (not on the remote)
 
 Kept in the source repo's `.git/secretgit/` (so it follows the repo and is

@@ -59,11 +59,11 @@ rides the same chain.
 ┌─────────────────────────────────────────────────────────────┐
 │  5. hosted E2E web app / confidential compute   (much later)│
 ├─────────────────────────────────────────────────────────────┤
-│  4. runner + deploy agent        encrypted CI logs, signed  │
-│                                  artifacts, pull-based CD   │
+│  4. runner + deploy agent        built ✔  signed checks,   │
+│                                  encrypted logs, pull CD    │
 ├─────────────────────────────────────────────────────────────┤
-│  3. collab: PRs, reviews, checks  git-native, encrypted,    │
-│     + local UI / IDE extension    notifications by webhook  │
+│  3. collab: PRs, reviews, checks  built ✔  events in git,   │
+│     + local UI / IDE extension    policy, local UI          │
 ├─────────────────────────────────────────────────────────────┤
 │  2. sync: git remote helper       built ✔  + share, ledger, │
 │     + team keys                   read-only local UI        │
@@ -211,10 +211,11 @@ Everything in `docs/threat-model.md` holds. With a team, add:
    `join` / `member add|remove`, revocation, `secretgit clone`.
    Also done from the mitigations: `share` pages with a disclosure ledger,
    and the read-only local UI with permalinks.
-3. **Collab** — documented PR/review data model, CLI, local UI (PR list,
-   diff, comments, approvals), webhook notifier, policy verification.
-4. **Runner + deploy** — runner agent with `act`/make pipelines, encrypted
-   logs and artifacts, signed checks, deploy agent, environment secrets.
+3. **Collab** — done: PR/review events in git, CLI, local UI with PR
+   pages, policy verification. Missing: webhook notifier relay.
+4. **Runner + deploy** — done: runner agent with the repo's own pipeline,
+   signed checks with encrypted logs, pull-based deploy agent. Missing:
+   signed artifacts, environment secrets, ephemeral/confidential VMs.
 5. **IDE extension, S3/rclone targets, hardware-backed keys, hosted E2E app.**
 
 The order is deliberate: each layer is useful on its own, and each is a
