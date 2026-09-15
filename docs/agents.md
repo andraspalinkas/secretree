@@ -39,8 +39,11 @@ request, and hands the job the PR context:
 So an agent is a runner with a name and a command:
 
 ```sh
-secretgit runner --name ai-review --cmd agents/review.sh
+secretgit runner --name ai-review --branches "" --cmd agents/review.sh
 ```
+
+`--branches ""` keeps the agent on pull requests only (by default a runner
+also checks `main`).
 
 `agents/review.sh` (in this repository) pipes the diff to a model, posts
 line comments with `secretgit pr comment --path --line`, records a verdict

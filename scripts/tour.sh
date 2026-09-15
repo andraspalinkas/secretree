@@ -109,13 +109,14 @@ cd "$TOUR/bot" && run bot secretgit clone "$TOUR/vault.git" app
 cat > "$TOUR/fake-review.sh" <<'SH'
 #!/bin/sh
 set -e
+[ -n "${SECRETGIT_PR:-}" ] || { echo "not a pull request; nothing to review"; exit 0; }
 secretgit -C "$SECRETGIT_REPO_DIR" ledger add --kind export --subject "diff of PR #$SECRETGIT_PR @$SECRETGIT_COMMIT → fake-model" --note "ai review" >/dev/null
 secretgit -C "$SECRETGIT_REPO_DIR" pr comment "$SECRETGIT_PR" --path src/retry.go --line 13 -m "Consider exponential backoff instead of a fixed delay." >/dev/null
 secretgit -C "$SECRETGIT_REPO_DIR" pr review "$SECRETGIT_PR" --verdict comment -m "No blocking issues; one suggestion inline." >/dev/null
 echo "review posted"
 SH
 chmod +x "$TOUR/fake-review.sh"
-cd "$TOUR/bot/app" && run bot secretgit runner --once --name ai-review --cmd "$TOUR/fake-review.sh"
+cd "$TOUR/bot/app" && run bot secretgit runner --once --name ai-review --branches "" --cmd "$TOUR/fake-review.sh"
 cd "$TOUR/alice/app" && run alice secretgit pr show 1 | sed -n '1,4p;/agent/p'
 
 step "8. merge (policy enforced), deploy (only with a green check)"

@@ -351,6 +351,9 @@ func Checks(events []Event, commit string) map[string]Event {
 // Resolve finds a PR by "#12", "12", or an id prefix.
 func Resolve(prs []PullRequest, ref string) (*PullRequest, error) {
 	ref = strings.TrimPrefix(ref, "#")
+	if ref == "" {
+		return nil, errors.New("which pull request? give #<number> or an id")
+	}
 	var hits []*PullRequest
 	for i := range prs {
 		if prs[i].ID == ref || strings.HasPrefix(prs[i].ID, ref) {
