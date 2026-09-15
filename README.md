@@ -157,6 +157,8 @@ secretgit link            permalink into the local UI
 - [Threat model](docs/threat-model.md) — what the tool does *not* protect against.
 - [Vault format v1](docs/vault-format.md) — what lands on the remote and why.
 - [Restore by hand](docs/restore-by-hand.md) — the disaster path, no secretgit needed.
+- [AI agents](docs/agents.md) — reviewer bots as agent members: keys, runner
+  jobs, ledger, what they may and may not do.
 - [Integrations](docs/integrations.md) — dependency updates, scanners, LLM
   review and previews as jobs on your runner.
 - [Decisions](docs/decisions.md) — architectural decision log.

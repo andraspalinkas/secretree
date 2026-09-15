@@ -191,3 +191,24 @@ func noteSuffix(n string) string {
 }
 
 var _ = ssh.FingerprintSHA256
+
+// LedgerAdd records a disclosure made outside secretgit (an export to a
+// model provider, a dashboard, a public mirror).
+func (a *App) LedgerAdd(dir, kind, subject, note string) error {
+	if kind == "" || subject == "" {
+		return fmt.Errorf("--kind and --subject are required")
+	}
+	r, err := a.openRepo(dir)
+	if err != nil {
+		return err
+	}
+	vs, err := a.loadVault(r)
+	if err != nil {
+		return err
+	}
+	if err := a.appendLedger(r, vs, LedgerEntry{Kind: kind, Subject: subject, Note: note}); err != nil {
+		return err
+	}
+	a.logf("ledger: %s %s recorded", kind, subject)
+	return nil
+}

@@ -99,6 +99,25 @@ run alice secretgit pr approve 1 -m "Fine as a first version."
 run alice secretgit runner --once
 run alice secretgit pr show 1
 
+step "7b. an AI review agent joins (role: agent) and reviews through the runner"
+mkdir -p "$TOUR/bot"
+bot() { SECRETGIT_HOME="$TOUR/bot-keys" GIT_AUTHOR_NAME=review-bot GIT_AUTHOR_EMAIL=bot@example.com GIT_COMMITTER_NAME=review-bot GIT_COMMITTER_EMAIL=bot@example.com "$@"; }
+run bot secretgit join --vault "$TOUR/vault.git" --name review-bot --out "$TOUR/bot-join-request.txt"
+run alice secretgit member add --request "$TOUR/bot-join-request.txt" --role agent
+cd "$TOUR/bot" && run bot secretgit clone "$TOUR/vault.git" app
+# a stand-in for a model: agents/review.sh does the same with `claude -p`
+cat > "$TOUR/fake-review.sh" <<'SH'
+#!/bin/sh
+set -e
+secretgit -C "$SECRETGIT_REPO_DIR" ledger add --kind export --subject "diff of PR #$SECRETGIT_PR @$SECRETGIT_COMMIT → fake-model" --note "ai review" >/dev/null
+secretgit -C "$SECRETGIT_REPO_DIR" pr comment "$SECRETGIT_PR" --path src/retry.go --line 13 -m "Consider exponential backoff instead of a fixed delay." >/dev/null
+secretgit -C "$SECRETGIT_REPO_DIR" pr review "$SECRETGIT_PR" --verdict comment -m "No blocking issues; one suggestion inline." >/dev/null
+echo "review posted"
+SH
+chmod +x "$TOUR/fake-review.sh"
+cd "$TOUR/bot/app" && run bot secretgit runner --once --name ai-review --cmd "$TOUR/fake-review.sh"
+cd "$TOUR/alice/app" && run alice secretgit pr show 1 | sed -n '1,4p;/agent/p'
+
 step "8. merge (policy enforced), deploy (only with a green check)"
 alice git checkout -q main
 run alice secretgit pr merge 1
@@ -139,7 +158,7 @@ cat <<MSG
 Everything is under $TOUR
 
   UI (alice's view):        http://127.0.0.1:7391          branches, files, blame, search
-                            http://127.0.0.1:7391/pulls    the merged PR with its inline comment and check
+                            http://127.0.0.1:7391/pulls    the merged PR: inline comments (one by the agent), checks, Resolve
   Permalink:                $(alice secretgit link src/main.go:6)
   Share page (no key):      file://$TOUR/share.html#$KEY
   Recovery kit:             $TOUR/alice-recovery-kit.txt

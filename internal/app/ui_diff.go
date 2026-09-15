@@ -76,22 +76,33 @@ func parseDiff(text string, comments map[string][]eventRow) []diffRow {
 	return rows
 }
 
-// inlineComments indexes comments anchored at the current head by path:line.
-func inlineComments(pr *collab.PullRequest, head string) map[string][]eventRow {
+// inlineComments indexes comments by path:line at the current head.
+// Comments made on an earlier head are followed through the diff to their
+// new line; ones whose line changed are outdated and stay in the
+// conversation only.
+func inlineComments(c *prContext, pr *collab.PullRequest, head string) map[string][]eventRow {
 	out := map[string][]eventRow{}
+	resolved := pr.Resolved()
 	for _, e := range pr.Events {
 		if e.Kind != collab.KindComment || e.Path == "" || e.Line == 0 {
 			continue
 		}
+		line, moved := e.Line, false
 		if e.Commit != "" && e.Commit != head {
-			continue // anchored on an older head; shown in the conversation with its commit
+			nl, ok := remapLine(c.r.Work, e.Commit, head, e.Path, e.Line)
+			if !ok {
+				continue
+			}
+			line, moved = nl, nl != e.Line
 		}
 		who := e.ActorName
 		if who == "" {
 			who = e.Actor
 		}
-		k := e.Path + ":" + strconv.Itoa(e.Line)
-		out[k] = append(out[k], eventRow{Kind: e.Kind, Who: who, When: e.Created.Format("2006-01-02 15:04"), Body: e.Body, Path: e.Path, Line: e.Line, Commit: short(e.Commit)})
+		row := eventRow{ID: e.ID, Kind: e.Kind, Who: who, When: e.Created.Format("2006-01-02 15:04"), Body: e.Body, Path: e.Path, Line: line, Commit: short(e.Commit),
+			Agent: c.agents[e.Actor], ResolvedBy: resolved[e.ID], Moved: moved}
+		k := e.Path + ":" + strconv.Itoa(line)
+		out[k] = append(out[k], row)
 	}
 	return out
 }

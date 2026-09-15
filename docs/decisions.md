@@ -237,3 +237,19 @@ Earlier notes suggested re-encrypting old generations for members added
 later. Unnecessary: the full generation written by `member add` carries
 the complete git history. Only earlier *backup snapshots* stay opaque to
 the newcomer, which is the intended property.
+
+## 0029 — Agents are members with a role, not integrations — accepted (2026-09-15)
+
+An AI reviewer joins like a device (`join`, `member add --role agent`),
+runs as a runner job with the PR context in the environment, and writes
+signed comments and verdicts. Its approvals never count, it cannot merge.
+Sending a diff to a hosted model is a disclosure and the agent records it
+in the ledger before doing so.
+
+## 0030 — Line comments follow the code; changed lines are outdated — accepted (2026-09-15)
+
+A comment is anchored to `path:line@commit`. On a newer head it is mapped
+through `git diff -U0 <commit> <head>`: unchanged lines are followed to
+their new number (shown inline, marked), lines inside a changed hunk make
+the comment "outdated" (conversation only). Threads are resolved by a
+signed `resolve` event referencing the comment id.

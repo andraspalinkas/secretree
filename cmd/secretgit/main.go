@@ -28,13 +28,14 @@ commands:
   install-helper [--dir <bindir>]     # makes "git clone secretgit::<vault-url>" work
   schedule  --every <duration> | --daily HH:MM | --remove | --show
   join      --vault <url|dir> [--name <device>] [--out <file>]   # new device: keys + join request
-  member    list | add --request <file> | add --recipient age1... [--signer "ssh-ed25519 ..."] --name <n> | remove --name <n> | request
+  member    list | add --request <file> [--role agent] | add --recipient age1... [--signer "..."] --name <n> | remove --name <n> | request
   share     <path> [--ref <ref>] | --diff <a..b> [--expires 7d] [--note <why>] [--out <file.html>]
-  ledger                                # every deliberate disclosure, signed and chained
+  ledger    [add --kind export --subject <what> [--note <why>]]   # every deliberate disclosure, signed and chained
   ui        [--listen 127.0.0.1:7391] [--open] | --install | --uninstall   # local code browser + pull requests
   watch     --ntfy <url> | --desktop | --exec <cmd> [--serve :8787] [--include-titles]   # activity notifications
   pr        open --title <t> [--base main] [--head <branch>] | list [--all] | show <#n> | comment <#n> -m <text> [--path f --line n]
-            approve <#n> [-m] | request-changes <#n> -m | merge <#n> [--method merge|squash|ff] | close <#n>
+            approve <#n> [-m] | request-changes <#n> -m | review <#n> --verdict <v> [-m] | resolve <#n> <comment-id>
+            merge <#n> [--method merge|squash|ff] | close <#n>
   policy    [--approvals 1] [--checks ci]        # writes .secretgit/policy.json (commit it on the base branch)
   runner    [--name ci] [--cmd <sh>] [--branches main] [--interval 60s] [--once]   # CI agent on a key-holding machine
   deploy-agent --to <dir> [--branch main] [--cmd <sh>] [--require-check ci] [--once]  # pull-based CD on the target host
@@ -191,6 +192,7 @@ func main() {
 		fs.StringVar(&o.Recipient, "recipient", "", "age public key")
 		fs.StringVar(&o.Signer, "signer", "", "ssh public key line")
 		fs.StringVar(&o.Name, "name", "", "member name")
+		fs.StringVar(&o.Role, "role", "", "\"agent\" for AI or bot members: may comment and review, approvals do not count, cannot merge")
 		must(fs.Parse(subrest))
 		switch sub {
 		case "list":
@@ -220,7 +222,16 @@ func main() {
 		}
 		err = a.Share(o)
 	case "ledger":
-		err = a.Ledger(*dir)
+		if len(rest) > 0 && rest[0] == "add" {
+			fs := flag.NewFlagSet("ledger add", flag.ExitOnError)
+			kind := fs.String("kind", "export", "share | export | public-mirror")
+			subject := fs.String("subject", "", "what left, e.g. \"diff #7 → claude\"")
+			note := fs.String("note", "", "why")
+			must(fs.Parse(rest[1:]))
+			err = a.LedgerAdd(*dir, *kind, *subject, *note)
+		} else {
+			err = a.Ledger(*dir)
+		}
 	case "ui":
 		fs := flag.NewFlagSet("ui", flag.ExitOnError)
 		o := app.UIOptions{Dir: *dir}
@@ -248,7 +259,7 @@ func main() {
 		err = a.Link(*dir, pos[0], *ref)
 	case "pr":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "usage: secretgit pr open|list|show|comment|approve|request-changes|merge|close")
+			fmt.Fprintln(os.Stderr, "usage: secretgit pr open|list|show|comment|review|approve|request-changes|resolve|merge|close")
 			os.Exit(2)
 		}
 		sub, subrest := rest[0], rest[1:]
@@ -262,6 +273,7 @@ func main() {
 		line := fs.Int("line", 0, "line the comment refers to")
 		all := fs.Bool("all", false, "include merged and closed")
 		method := fs.String("method", "merge", "merge | squash | ff")
+		verdict := fs.String("verdict", "", "approve | request_changes | comment (for: pr review)")
 		pos := parseAll(fs, subrest)
 		ref := ""
 		if len(pos) > 0 {
@@ -283,12 +295,20 @@ func main() {
 			err = a.PRReview(*dir, ref, "approve", *msg)
 		case "request-changes":
 			err = a.PRReview(*dir, ref, "request_changes", *msg)
+		case "review":
+			err = a.PRReview(*dir, ref, *verdict, *msg)
+		case "resolve":
+			if len(pos) < 2 {
+				fmt.Fprintln(os.Stderr, "usage: secretgit pr resolve <#n> <comment-id>")
+				os.Exit(2)
+			}
+			err = a.PRResolve(*dir, ref, pos[1])
 		case "merge":
 			err = a.PRMerge(*dir, ref, *method)
 		case "close":
 			err = a.PRClose(*dir, ref)
 		default:
-			fmt.Fprintln(os.Stderr, "usage: secretgit pr open|list|show|comment|approve|request-changes|merge|close")
+			fmt.Fprintln(os.Stderr, "usage: secretgit pr open|list|show|comment|review|approve|request-changes|resolve|merge|close")
 			os.Exit(2)
 		}
 	case "policy":

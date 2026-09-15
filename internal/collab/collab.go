@@ -39,6 +39,7 @@ const (
 	KindState   = "state"
 	KindCheck   = "check"
 	KindDeploy  = "deploy"
+	KindResolve = "resolve" // Ref = id of the comment whose thread is resolved
 
 	VerdictApprove        = "approve"
 	VerdictRequestChanges = "request_changes"
@@ -81,6 +82,9 @@ type Event struct {
 	// state
 	State       string `json:"state,omitempty"`
 	MergeCommit string `json:"merge_commit,omitempty"`
+
+	// resolve
+	Ref string `json:"ref,omitempty"`
 
 	// check / deploy
 	Name    string `json:"name,omitempty"`
@@ -288,10 +292,15 @@ func Fold(events []Event) []PullRequest {
 }
 
 // Approvals returns the actors whose latest review of headSHA approves.
-func (pr *PullRequest) Approvals(headSHA string) (approved, changesRequested []string) {
+// Reviews by actors in exclude (agents) are reported separately via
+// AgentReviews and never count.
+func (pr *PullRequest) Approvals(headSHA string, exclude ...map[string]bool) (approved, changesRequested []string) {
 	latest := map[string]Event{}
 	for _, e := range pr.Events {
 		if e.Kind == KindReview && e.Commit == headSHA {
+			if len(exclude) > 0 && exclude[0][e.Actor] {
+				continue
+			}
 			latest[e.Actor] = e
 		}
 	}
@@ -310,6 +319,22 @@ func (pr *PullRequest) Approvals(headSHA string) (approved, changesRequested []s
 	sort.Strings(approved)
 	sort.Strings(changesRequested)
 	return
+}
+
+// Resolved returns the ids of comments whose threads were resolved, with
+// the resolver's name.
+func (pr *PullRequest) Resolved() map[string]string {
+	out := map[string]string{}
+	for _, e := range pr.Events {
+		if e.Kind == KindResolve && e.Ref != "" {
+			name := e.ActorName
+			if name == "" {
+				name = e.Actor
+			}
+			out[e.Ref] = name
+		}
+	}
+	return out
 }
 
 // Checks returns the latest check per name for a commit, from all events.

@@ -65,27 +65,36 @@ func (a *App) runnerPass(o RunnerOptions) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	targets := map[string]string{} // sha -> description
+	type target struct {
+		what string
+		env  []string
+	}
+	targets := map[string]target{}
 	for i := range c.prs {
 		pr := &c.prs[i]
 		if pr.State == collab.StateOpen {
 			if sha := c.headSHA(pr); sha != "" {
-				targets[sha] = fmt.Sprintf("#%d %s", pr.Number, pr.Head)
+				targets[sha] = target{what: fmt.Sprintf("#%d %s", pr.Number, pr.Head), env: []string{
+					"SECRETGIT_PR=" + fmt.Sprint(pr.Number), "SECRETGIT_PR_ID=" + pr.ID,
+					"SECRETGIT_BASE=" + c.baseSHA(pr), "SECRETGIT_BASE_BRANCH=" + pr.Base, "SECRETGIT_HEAD_BRANCH=" + pr.Head}}
 			}
 		}
 	}
 	for _, br := range o.Branches {
 		if sha := c.baseSHA(&collab.PullRequest{Base: br}); sha != "" {
-			targets[sha] = br
+			if _, isPR := targets[sha]; !isPR {
+				targets[sha] = target{what: br, env: []string{"SECRETGIT_BRANCH=" + br}}
+			}
 		}
 	}
 	done := 0
-	for sha, what := range targets {
+	for sha, t := range targets {
 		if _, ok := collab.Checks(c.events, sha)[o.Name]; ok {
 			continue
 		}
+		what := t.what
 		a.logf("runner: %s @ %s", what, short(sha))
-		status, summary, log := a.runJob(c, o, sha)
+		status, summary, log := a.runJob(c, o, sha, t.env)
 		e := &collab.Event{Kind: collab.KindCheck, Commit: sha, Name: o.Name, Status: status, Summary: summary, Log: log}
 		if err := c.append(e); err != nil {
 			return done, err
@@ -97,7 +106,7 @@ func (a *App) runnerPass(o RunnerOptions) (int, error) {
 }
 
 // runJob executes the pipeline for one commit in a detached worktree.
-func (a *App) runJob(c *prContext, o RunnerOptions, sha string) (status, summary, log string) {
+func (a *App) runJob(c *prContext, o RunnerOptions, sha string, extraEnv []string) (status, summary, log string) {
 	wt, err := os.MkdirTemp("", "secretgit-job-")
 	if err != nil {
 		return collab.StatusFailure, err.Error(), ""
@@ -122,7 +131,11 @@ func (a *App) runJob(c *prContext, o RunnerOptions, sha string) (status, summary
 	defer cancel()
 	run := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
 	run.Dir = wt
-	run.Env = append(gitx.Env(), "CI=1", "SECRETGIT_COMMIT="+sha, "SECRETGIT_CHECK="+o.Name)
+	run.Env = append(gitx.Env(), "CI=1", "SECRETGIT_COMMIT="+sha, "SECRETGIT_CHECK="+o.Name, "SECRETGIT_REPO_DIR="+c.r.Work)
+	run.Env = append(run.Env, extraEnv...)
+	if exe := exePath(); exe != "" { // let jobs call secretgit (pr comment, ledger add) even off PATH
+		run.Env = append(run.Env, "PATH="+filepath.Dir(exe)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
 	var out bytes.Buffer
 	run.Stdout, run.Stderr = &out, &out
 	start := time.Now()

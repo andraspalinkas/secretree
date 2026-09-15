@@ -54,6 +54,7 @@ type RevokedSigner struct {
 // remain authoritative.
 type Member struct {
 	Name              string    `json:"name,omitempty"`
+	Role              string    `json:"role,omitempty"` // "" (person) or "agent"
 	Recipient         string    `json:"recipient"`
 	SignerFingerprint string    `json:"signer_fingerprint,omitempty"`
 	Added             time.Time `json:"added"`

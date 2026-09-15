@@ -53,12 +53,18 @@ func (a *App) collabStore(r *repo, vs *vaultState) *collab.Store {
 
 // prContext opens everything a PR command needs and syncs collab state.
 type prContext struct {
-	r      *repo
-	vs     *vaultState
-	store  *collab.Store
-	remote string
-	events []collab.Event
-	prs    []collab.PullRequest
+	r       *repo
+	vs      *vaultState
+	store   *collab.Store
+	remote  string
+	events  []collab.Event
+	prs     []collab.PullRequest
+	agents  map[string]bool // signer fingerprints of agent members
+	isAgent bool            // this device is an agent
+}
+
+func (c *prContext) approvals(pr *collab.PullRequest, head string) ([]string, []string) {
+	return pr.Approvals(head, c.agents)
 }
 
 func (a *App) openPR(dir string) (*prContext, error) {
@@ -70,7 +76,16 @@ func (a *App) openPR(dir string) (*prContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &prContext{r: r, vs: vs, store: a.collabStore(r, vs), remote: secretgitRemote(r.Work)}
+	c := &prContext{r: r, vs: vs, store: a.collabStore(r, vs), remote: secretgitRemote(r.Work), agents: map[string]bool{}}
+	ourFP, _ := r.Keys.Fingerprint()
+	for _, m := range vs.Meta.Members {
+		if m.Role == "agent" && m.SignerFingerprint != "" {
+			c.agents[m.SignerFingerprint] = true
+			if m.SignerFingerprint == ourFP {
+				c.isAgent = true
+			}
+		}
+	}
 	if c.remote != "" {
 		if _, err := gitx.Run(r.Work, "fetch", "--quiet", c.remote); err != nil {
 			return nil, fmt.Errorf("fetch %s: %w", c.remote, err)
@@ -195,7 +210,7 @@ func (a *App) PRList(dir string, all bool) error {
 		}
 		n++
 		head := c.headSHA(pr)
-		approved, changes := pr.Approvals(head)
+		approved, changes := c.approvals(pr, head)
 		checks := collab.Checks(c.events, head)
 		a.logf("#%-4d %-7s %-40s %s → %s  by %s  %s%s", pr.Number, pr.State, truncate(pr.Title, 40), pr.Head, pr.Base, pr.Author, reviewSummary(approved, changes), checkSummary(checks))
 	}
@@ -257,7 +272,7 @@ func (a *App) PRShow(dir, ref string) error {
 		a.logf("\n%s", pr.Body)
 	}
 	pol := collab.LoadPolicy(c.r.Work, base)
-	approved, changes := pr.Approvals(head)
+	approved, changes := c.approvals(pr, head)
 	a.logf("\napprovals: %d/%d %v  changes requested: %v", len(approved), pol.RequiredApprovals, approved, changes)
 	checks := collab.Checks(c.events, head)
 	for name, e := range checks {
@@ -269,6 +284,7 @@ func (a *App) PRShow(dir, ref string) error {
 		}
 	}
 	a.logf("")
+	resolved := pr.Resolved()
 	for _, e := range pr.Events {
 		who := e.ActorName
 		if who == "" {
@@ -280,8 +296,22 @@ func (a *App) PRShow(dir, ref string) error {
 			loc := ""
 			if e.Path != "" {
 				loc = fmt.Sprintf(" on %s:%d@%s", e.Path, e.Line, short(e.Commit))
+				if e.Commit != "" && e.Commit != head {
+					if nl, ok := remapLine(c.r.Work, e.Commit, head, e.Path, e.Line); ok {
+						loc += fmt.Sprintf(" (now line %d)", nl)
+					} else {
+						loc += " (outdated)"
+					}
+				}
 			}
-			a.logf("[%s] %s commented%s:\n    %s", when, who, loc, strings.ReplaceAll(e.Body, "\n", "\n    "))
+			tag := ""
+			if c.agents[e.Actor] {
+				tag = " [agent]"
+			}
+			if by, ok := resolved[e.ID]; ok {
+				tag += " [resolved by " + by + "]"
+			}
+			a.logf("[%s] %s%s commented%s (id %s):\n    %s", when, who, tag, loc, e.ID, strings.ReplaceAll(e.Body, "\n", "\n    "))
 		case collab.KindReview:
 			a.logf("[%s] %s: %s @%s %s", when, who, e.Verdict, short(e.Commit), e.Body)
 		case collab.KindState:
@@ -347,6 +377,32 @@ func (a *App) PRReview(dir, ref, verdict, body string) error {
 	return nil
 }
 
+// PRResolve marks a comment's thread resolved.
+func (a *App) PRResolve(dir, ref, commentID string) error {
+	c, err := a.openPR(dir)
+	if err != nil {
+		return err
+	}
+	pr, err := collab.Resolve(c.prs, ref)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, e := range pr.Events {
+		if e.Kind == collab.KindComment && strings.HasPrefix(e.ID, commentID) {
+			commentID, found = e.ID, true
+		}
+	}
+	if !found {
+		return fmt.Errorf("no comment %s on #%d", commentID, pr.Number)
+	}
+	if err := c.append(&collab.Event{Kind: collab.KindResolve, PR: pr.ID, Ref: commentID}); err != nil {
+		return err
+	}
+	a.logf("#%d: thread %s resolved", pr.Number, commentID)
+	return nil
+}
+
 // PRClose closes without merging.
 func (a *App) PRClose(dir, ref string) error {
 	c, err := a.openPR(dir)
@@ -370,7 +426,7 @@ func (c *prContext) mergeCheck(pr *collab.PullRequest, head, base string) string
 		return fmt.Sprintf("#%d is %s", pr.Number, pr.State)
 	}
 	pol := collab.LoadPolicy(c.r.Work, base)
-	approved, changes := pr.Approvals(head)
+	approved, changes := c.approvals(pr, head)
 	if len(changes) > 0 {
 		return "changes requested by " + strings.Join(changes, ", ")
 	}
@@ -406,6 +462,9 @@ func (a *App) PRMerge(dir, ref, method string) error {
 	head, base := c.headSHA(pr), c.baseSHA(pr)
 	if base == "" {
 		return fmt.Errorf("base branch %s not found", pr.Base)
+	}
+	if c.isAgent {
+		return errors.New("cannot merge: this device is an agent; a person has to merge")
 	}
 	if why := c.mergeCheck(pr, head, base); why != "" {
 		return errors.New("cannot merge: " + why)
@@ -491,4 +550,54 @@ func (a *App) PolicyInit(dir string, approvals int, checks []string) error {
 	}
 	a.logf("wrote %s; commit it on the base branch to enforce it", p)
 	return nil
+}
+
+// remapLine follows a line of path from commit from to commit to through
+// the diff between them. ok is false when the line itself was changed or
+// removed (the comment is outdated), true with the new number otherwise.
+func remapLine(dir, from, to, path string, line int) (int, bool) {
+	if from == to || from == "" {
+		return line, true
+	}
+	out, err := gitx.Run(dir, "diff", "-U0", from, to, "--", path)
+	if err != nil {
+		return 0, false
+	}
+	delta := 0
+	for _, l := range strings.Split(out, "\n") {
+		if !strings.HasPrefix(l, "@@") {
+			continue
+		}
+		// @@ -oldStart[,oldLen] +newStart[,newLen] @@
+		f := strings.Fields(l)
+		if len(f) < 3 {
+			continue
+		}
+		oStart, oLen := hunkRange(f[1])
+		_, nLen := hunkRange(f[2])
+		if oLen == 0 { // pure insertion at oStart: lines after it shift
+			if line > oStart {
+				delta += nLen
+			}
+			continue
+		}
+		if line >= oStart && line < oStart+oLen {
+			return 0, false // the commented line was changed or deleted
+		}
+		if line >= oStart+oLen {
+			delta += nLen - oLen
+		}
+	}
+	return line + delta, true
+}
+
+func hunkRange(s string) (start, length int) {
+	s = strings.TrimLeft(s, "-+")
+	a, b, hasLen := strings.Cut(s, ",")
+	fmt.Sscanf(a, "%d", &start)
+	length = 1
+	if hasLen {
+		fmt.Sscanf(b, "%d", &length)
+	}
+	return
 }

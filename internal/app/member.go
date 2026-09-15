@@ -127,6 +127,7 @@ type MemberOptions struct {
 	Recipient string
 	Signer    string // ssh public key line ("ssh-ed25519 AAAA... comment")
 	Name      string
+	Role      string // "" or "agent": agents may read, comment and review, but their approvals do not count and they cannot merge
 }
 
 // MemberAdd adds a recipient and signer to the vault, re-signs vault.json,
@@ -181,7 +182,10 @@ func (a *App) MemberAdd(o MemberOptions) error {
 		}
 	}
 	meta.Recipients = append(meta.Recipients, o.Recipient)
-	member := vault.Member{Name: o.Name, Recipient: o.Recipient, Added: time.Now().UTC().Truncate(time.Second)}
+	if o.Role != "" && o.Role != "agent" {
+		return fmt.Errorf("--role must be empty or \"agent\"")
+	}
+	member := vault.Member{Name: o.Name, Role: o.Role, Recipient: o.Recipient, Added: time.Now().UTC().Truncate(time.Second)}
 	if o.Signer != "" {
 		line := o.Signer
 		if !strings.HasPrefix(line, keys.Principal+" ") {
@@ -202,7 +206,11 @@ func (a *App) MemberAdd(o MemberOptions) error {
 	if err := a.writeMeta(r, vs, meta); err != nil {
 		return err
 	}
-	a.logf("member added: %s (%s)", o.Name, o.Recipient)
+	if o.Role == "agent" {
+		a.logf("agent added: %s (%s); its approvals do not count and it cannot merge", o.Name, o.Recipient)
+	} else {
+		a.logf("member added: %s (%s)", o.Name, o.Recipient)
+	}
 	return a.reencryptForward(r, vs)
 }
 
@@ -317,6 +325,9 @@ func (a *App) MemberList(dir string) error {
 		name := m.Name
 		if name == "" {
 			name = "-"
+		}
+		if m.Role == "agent" {
+			mark += "  [agent]"
 		}
 		a.logf("  %-16s %s  signer %s%s", name, rec, orDash(m.SignerFingerprint), mark)
 	}

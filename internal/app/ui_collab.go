@@ -28,6 +28,7 @@ func (s *uiServer) collabRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /pull/{id}/review", s.pullAction)
 	mux.HandleFunc("POST /pull/{id}/merge", s.pullAction)
 	mux.HandleFunc("POST /pull/{id}/close", s.pullAction)
+	mux.HandleFunc("POST /pull/{id}/resolve", s.pullAction)
 }
 
 // quiet returns an App whose output is discarded (UI actions report via redirects).
@@ -66,8 +67,12 @@ type prPage struct {
 }
 
 type eventRow struct {
-	Kind, Who, When, Body, Path, Verdict, State, Commit string
-	Line                                                int
+	ID, Kind, Who, When, Body, Path, Verdict, State, Commit string
+	Line                                                    int
+	Agent                                                   bool   // written by an agent member
+	ResolvedBy                                              string // thread resolved, by whom
+	Moved                                                   bool   // followed to a new line on the current head
+	Outdated                                                bool   // its line changed since; not shown inline
 }
 
 func (s *uiServer) renderPR(w http.ResponseWriter, p *prPage) {
@@ -139,20 +144,27 @@ func (s *uiServer) pull(w http.ResponseWriter, r *http.Request) {
 	if pr.State == collab.StateOpen {
 		p.MergeBlock = c.mergeCheck(pr, head, base)
 		if out, err := gitx.Run(c.r.Work, "diff", base+"..."+head); err == nil {
-			p.DiffRows = parseDiff(out, inlineComments(pr, head))
+			p.DiffRows = parseDiff(out, inlineComments(c, pr, head))
 		}
 	} else if pr.MergeCommit != "" {
 		if out, err := gitx.Run(c.r.Work, "show", "--stat", "--format=merged as %h", pr.MergeCommit); err == nil {
 			p.Diff = renderDiff(out)
 		}
 	}
+	resolved := pr.Resolved()
 	for _, e := range pr.Events {
 		who := e.ActorName
 		if who == "" {
 			who = e.Actor
 		}
-		p.Events = append(p.Events, eventRow{Kind: e.Kind, Who: who, When: e.Created.Format("2006-01-02 15:04"), Body: e.Body,
-			Path: e.Path, Line: e.Line, Verdict: e.Verdict, State: e.State, Commit: short(e.Commit)})
+		row := eventRow{ID: e.ID, Kind: e.Kind, Who: who, When: e.Created.Format("2006-01-02 15:04"), Body: e.Body,
+			Path: e.Path, Line: e.Line, Verdict: e.Verdict, State: e.State, Commit: short(e.Commit), Agent: c.agents[e.Actor], ResolvedBy: resolved[e.ID]}
+		if e.Kind == collab.KindComment && e.Path != "" && e.Commit != "" && e.Commit != head {
+			if _, ok := remapLine(c.r.Work, e.Commit, head, e.Path, e.Line); !ok {
+				row.Outdated = true
+			}
+		}
+		p.Events = append(p.Events, row)
 	}
 	s.renderPR(w, p)
 }
@@ -205,6 +217,8 @@ func (s *uiServer) pullAction(w http.ResponseWriter, r *http.Request) {
 		err = a.PRMerge(s.work, id, r.FormValue("method"))
 	case "close":
 		err = a.PRClose(s.work, id)
+	case "resolve":
+		err = a.PRResolve(s.work, id, r.FormValue("comment"))
 	}
 	target := "/pull/" + id
 	if err != nil {
@@ -228,6 +242,8 @@ details summary{cursor:pointer}pre.log{font:11px/1.4 ui-monospace,Menlo,monospac
 .diff.rows div{display:flex;align-items:flex-start;padding:0}.diff.rows .ln{width:44px;flex:none;text-align:right;padding-right:8px;color:#999;user-select:none}.diff.rows .tx{padding-left:8px;white-space:pre;flex:1}
 .diff.rows .add{width:16px;flex:none;text-align:center;color:transparent;text-decoration:none;font-weight:700}.diff.rows div:hover .add{color:#0969da}
 .diff.rows .ic{display:block;white-space:normal;background:#fff8c5;border-top:1px solid #e0c800;border-bottom:1px solid #e0c800;padding:6px 10px 6px 68px;font:13px/1.45 -apple-system,system-ui,sans-serif}.ic .who{font-weight:600}.ic .when{color:#666;font-size:12px;margin-left:6px}
+.pill.agent{background:#6e40c9;font-size:11px}.ev.done,.ic.done{opacity:.7}.ic.done details summary{color:#666;cursor:pointer}
+button.small{padding:1px 8px;font-size:12px;margin-top:4px}
 .diff.rows form.ic{background:#f6f8fa}.diff.rows form.ic textarea{width:100%;box-sizing:border-box;font:13px/1.4 -apple-system,system-ui,sans-serif;min-height:60px}
 </style>
 <script>
@@ -281,11 +297,12 @@ document.addEventListener("click", function (ev) {
 <form method="post" action="/pull/{{.PR.ID}}/close" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="danger">Close</button></form></div>
 {{end}}
 <h4>Changes</h4>
-{{if .DiffRows}}<div class="diff rows">{{range $i,$r := .DiffRows}}<div class="{{$r.Class}}"{{if $r.NewLine}} id="{{$r.Path}}-L{{$r.NewLine}}"{{end}}>{{if $r.NewLine}}<a class="add" href="#" data-path="{{$r.Path}}" data-line="{{$r.NewLine}}" title="comment on {{$r.Path}}:{{$r.NewLine}}">+</a><span class="ln">{{$r.NewLine}}</span>{{else}}<span class="ln"></span>{{end}}<span class="tx">{{$r.Text}}</span></div>{{range $r.Comments}}<div class="ic"><span class="who">{{.Who}}</span><span class="when">{{.When}}</span><div>{{.Body}}</div></div>{{end}}{{end}}</div>
+{{if .DiffRows}}<div class="diff rows">{{range $i,$r := .DiffRows}}<div class="{{$r.Class}}"{{if $r.NewLine}} id="{{$r.Path}}-L{{$r.NewLine}}"{{end}}>{{if $r.NewLine}}<a class="add" href="#" data-path="{{$r.Path}}" data-line="{{$r.NewLine}}" title="comment on {{$r.Path}}:{{$r.NewLine}}">+</a><span class="ln">{{$r.NewLine}}</span>{{else}}<span class="ln"></span>{{end}}<span class="tx">{{$r.Text}}</span></div>{{range $r.Comments}}<div class="ic{{if .ResolvedBy}} done{{end}}"><span class="who">{{.Who}}</span>{{if .Agent}} <span class="pill agent">agent</span>{{end}}<span class="when">{{.When}}{{if .Moved}} · followed from line {{.Line}} of {{.Commit}}{{end}}</span>
+{{if .ResolvedBy}}<span class="when">resolved by {{.ResolvedBy}}</span><details><summary>show</summary><div>{{.Body}}</div></details>{{else}}<div>{{.Body}}</div><form method="post" action="/pull/{{$.PR.ID}}/resolve" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="comment" value="{{.ID}}"><button class="small">Resolve</button></form>{{end}}</div>{{end}}{{end}}</div>
 {{else}}<div class="diff">{{.Diff}}</div>{{end}}
 <h4>Conversation</h4>
-{{range .Events}}{{if eq .Kind "comment"}}<div class="ev"><span class="who">{{.Who}}</span><span class="when">{{.When}}{{if .Path}} · {{.Path}}:{{.Line}} @{{.Commit}}{{end}}</span><div>{{.Body}}</div></div>
-{{else if eq .Kind "review"}}<div class="ev review {{.Verdict}}"><span class="who">{{.Who}}</span> <span class="pill {{if eq .Verdict "approve"}}success{{else if eq .Verdict "request_changes"}}failure{{else}}pending{{end}}">{{.Verdict}}</span><span class="when">{{.When}} @{{.Commit}}</span>{{if .Body}}<div>{{.Body}}</div>{{end}}</div>
+{{range .Events}}{{if eq .Kind "comment"}}<div class="ev{{if .ResolvedBy}} done{{end}}"><span class="who">{{.Who}}</span>{{if .Agent}} <span class="pill agent">agent</span>{{end}}<span class="when">{{.When}}{{if .Path}} · {{.Path}}:{{.Line}} @{{.Commit}}{{if .Outdated}} · outdated{{end}}{{end}}{{if .ResolvedBy}} · resolved by {{.ResolvedBy}}{{end}}</span><div>{{.Body}}</div></div>
+{{else if eq .Kind "review"}}<div class="ev review {{.Verdict}}"><span class="who">{{.Who}}</span>{{if .Agent}} <span class="pill agent">agent</span>{{end}} <span class="pill {{if eq .Verdict "approve"}}success{{else if eq .Verdict "request_changes"}}failure{{else}}pending{{end}}">{{.Verdict}}</span><span class="when">{{.When}} @{{.Commit}}</span>{{if .Body}}<div>{{.Body}}</div>{{end}}</div>
 {{else if eq .Kind "state"}}<div class="ev"><span class="who">{{.Who}}</span> marked it <b>{{.State}}</b> <span class="when">{{.When}} {{.Commit}}</span></div>{{end}}{{end}}
 {{if eq .PR.State "open"}}
 <div class="two">
