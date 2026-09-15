@@ -21,7 +21,7 @@ commands:
             [--from-recovery-kit <file>] [--repo-id <id>] [--no-remote] [--force]
   kit       --print <file> | --confirm       # the recovery kit is on paper (status warns until then)
   backup    [--full]
-  verify    [--generation N] [--quick]
+  verify    [--generation N] [--quick] [--all]
   restore   --vault <url|dir> --to <dir> [--repo-id <id>] [--generation N] [--from-recovery-kit <file>] [--no-state]
   status
   clone     <vault-url> [dir] [--repo-id <id>] [--from-recovery-kit <file>]
@@ -116,6 +116,7 @@ func main() {
 		o := app.VerifyOptions{Dir: *dir}
 		fs.IntVar(&o.Generation, "generation", 0, "generation to rebuild (default latest)")
 		fs.BoolVar(&o.Quick, "quick", false, "check signatures, hashes and chain only")
+		fs.BoolVar(&o.All, "all", false, "also hash every ciphertext of every generation (catches silent corruption of old blobs)")
 		must(fs.Parse(rest))
 		err = a.Verify(o)
 	case "restore":

@@ -3,10 +3,12 @@ package app
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
 	"secretgit/internal/config"
+	"secretgit/internal/crypt"
 	"secretgit/internal/gitx"
 	"secretgit/internal/vault"
 )
@@ -66,6 +68,7 @@ type VerifyOptions struct {
 	Dir        string
 	Generation int  // 0 = latest
 	Quick      bool // signatures, hashes and chain only; no rebuild
+	All        bool // also check every ciphertext of every generation against its manifest
 }
 
 // Verify re-checks the vault from a fresh fetch and rebuilds a generation.
@@ -113,6 +116,30 @@ func (a *App) Verify(o VerifyOptions) error {
 		}
 		a.logf("generation %06d: %-11s %s  %3d refs  %9s  signed, chained", g.Num, g.Manifest.Kind,
 			g.Manifest.Created.Format("2006-01-02 15:04"), len(g.Manifest.Refs), humanBytes(size))
+	}
+	if o.All {
+		checked := 0
+		for _, g := range chain.Gens {
+			if g.Opaque() {
+				continue
+			}
+			for _, f := range g.Manifest.Files {
+				p := filepath.Join(tmp, f.Name)
+				if err := reader.ExtractFile(vault.RepoDir(r.Cfg.RepoID)+"/"+f.Name, p); err != nil {
+					return err
+				}
+				h, err := crypt.SHA256File(p)
+				_ = os.Remove(p)
+				if err != nil {
+					return err
+				}
+				if h != f.CiphertextSHA256 {
+					return fmt.Errorf("generation %06d: %s is CORRUPT on the remote (sha256 %s, manifest says %s)", g.Num, f.Name, h[:12], f.CiphertextSHA256[:12])
+				}
+				checked++
+			}
+		}
+		a.logf("every ciphertext matches its manifest (%d files, %s)", checked, humanBytes(chain.Bytes()))
 	}
 	if o.Quick {
 		a.logf("chain OK (%d generations, %s); rebuild skipped (--quick)", len(chain.Gens), humanBytes(chain.Bytes()))

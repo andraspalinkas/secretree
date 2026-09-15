@@ -40,6 +40,16 @@ uses a 0600 file under `~/.config/secretgit`), re-encrypting history for
 members added later, notification relay. Roadmap in [docs/vision.md](docs/vision.md).
 Website: [site/index.html](site/index.html).
 
+## Try everything in five minutes
+
+```bash
+scripts/tour.sh        # builds the binary, walks two "devices" through every feature on a local vault,
+                       # leaves the local UI running at http://127.0.0.1:7391; scripts/tour.sh --clean removes it
+```
+
+It uses a file key store under the tour directory, so your real Keychain
+and no remote host are touched.
+
 ## Quick start
 
 ```bash
