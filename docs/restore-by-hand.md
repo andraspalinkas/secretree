@@ -86,9 +86,9 @@ must be applied in order. Earlier generations are not needed for a restore
 ```bash
 git clone --bare /tmp/sg/<full N>.bundle restored.git
 cd restored.git
-# for each incremental in order:
+# for each later generation in order that has a bundle (some have none):
 git bundle verify /tmp/sg/<N>.bundle              # checks prerequisites are present
-git fetch /tmp/sg/<N>.bundle '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+git fetch --no-tags /tmp/sg/<N>.bundle '+refs/*:refs/*'
 ```
 
 Then make the refs match the manifest of `G` exactly (this also removes

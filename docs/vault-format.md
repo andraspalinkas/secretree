@@ -174,10 +174,11 @@ Field semantics:
 - Full: `git bundle create <out> --all`. `--all` includes `HEAD`; the tool
   additionally records the ref map in the manifest.
 - Incremental: `git bundle create <out> --all ^<tip1> ^<tip2> …` where the
-  tips are every sha in the base generation's `refs`. If the resulting object
-  set would be empty (no ref changed), **no generation is written** and the
-  run reports "nothing to back up"; state-only changes still produce a
-  generation with a state archive and no bundle.
+  tips are every commit or tag id in the base generation's `refs`. If the
+  resulting object set would be empty *and* neither the ref map, `HEAD` nor
+  the state archive changed, **no generation is written** and the run
+  reports "nothing to back up". If only refs or state changed, a generation
+  is written **without a bundle**: the manifest's ref map carries the change.
 - A new **full** generation is written when any of these hold:
   - the number of incrementals since the last full ≥ `full_every` (default 20);
   - the sum of incremental ciphertext sizes since the last full exceeds the
@@ -231,8 +232,9 @@ Given a target generation `G`:
 
 1. Find the nearest full generation `F ≤ G` in the chain.
 2. `git clone --bare F.bundle` (or `git init` + `git fetch`).
-3. For each incremental `F+1 … G` in order: check prerequisites are
-   present, `git fetch <bundle> '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'`.
+3. For each incremental `F+1 … G` in order that has a bundle: check
+   prerequisites are present (`git bundle verify`), then
+   `git fetch --no-tags <bundle> '+refs/*:refs/*'`.
 4. Apply the manifest `refs` map of `G` exactly: create/update every listed
    ref, delete any ref not listed. Set `HEAD` from `source.head`.
 5. `git fsck --connectivity-only` must pass.

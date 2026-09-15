@@ -39,9 +39,13 @@ tool never force-pushes. Growth is bounded by periodic new full bundles;
 pruning old chains is a phase-2 concern and will be done by starting a new
 vault branch, never by rewriting.
 
-## 0007 — Implementation language — proposed
+## 0007 — Implementation language: Go — accepted (2026-09-15)
 
-Candidates:
+Owner's decision after weighing the candidates below. Go 1.27 is installed
+under `~/sdk/go` (no Homebrew on the machine); `PATH` is set in `~/.zshrc`.
+Module path is the bare name `secretgit` until a public home is chosen.
+
+Candidates were:
 
 - **Go** (recommended in the handoff): one static binary per platform, the
   reference age implementation is a Go library (`filippo.io/age`), OpenSSH
@@ -57,18 +61,46 @@ Candidates:
 - **Rust**: rage is native, single binary, but no toolchain installed and
   slowest iteration for a weekend MVP.
 
-Decision pending owner's answer. Everything in `docs/` is language-neutral.
+Everything in `docs/` stays language-neutral.
 
-## 0008 — Key stores — proposed
+## 0008 — Key stores — accepted for MVP (2026-09-15)
 
 MVP: macOS Keychain (`security` CLI or Security.framework), item per key,
 service `secretgit`, account `<vault-id>/<key-role>`. Phase 2: Linux
 Secret Service (D-Bus), Windows Credential Manager. Hardware-backed keys
 (Secure Enclave via an age plugin, TPM) are phase 2+.
 
-## 0009 — MVP targets — proposed
+## 0009 — MVP targets — accepted for MVP (2026-09-15)
 
 Remote types in the MVP: any git remote (SSH or HTTPS URL) and a local
 directory (which is just a bare git repo on disk, so it is the same code
 path and the natural test fixture). S3/rclone targets are phase 2; the
 format is designed so a target only needs "put file" and "list/get files".
+
+## 0010 — Vault clones are partial and checkout-less — accepted (2026-09-15)
+
+Both the persistent cache under `.git/secretgit/vault-cache` and the fresh
+clone made for every restore proof use `git clone --no-checkout
+--filter=blob:none`, falling back to a plain no-checkout clone when the
+server rejects filters. Manifests and only the bundles a restore needs are
+fetched on demand, so the proof costs a few small blobs plus one chain of
+bundles, not the whole vault. New generations are committed from the index
+(`git read-tree HEAD` + `git add`), which needs no checkout either. Local
+bare vaults are created with `uploadpack.allowFilter`, `receive.denyDeletes`
+and `receive.denyNonFastForwards` set.
+
+## 0011 — Generations may carry no bundle — accepted (2026-09-15)
+
+A generation whose only change is a ref move onto existing objects (branch
+created, deleted or renamed) or a state-archive change has no bundle file;
+the manifest's ref map is authoritative. `git bundle` refuses to write an
+empty bundle, and the alternative (forcing a full) would bloat the vault for
+nothing. A `full` generation always carries a bundle.
+
+## 0012 — Plaintext scratch space lives under `.git/secretgit/tmp` — accepted, revisit (2026-09-15)
+
+Bundles and state archives exist in plaintext for the duration of a run in
+a 0700 directory inside the repository's git dir, on the same disk as the
+source itself, so no new exposure is created. A RAM-backed location
+(tmpfs, macOS `hdiutil` ram disk) is a planned hardening for the runner and
+restore-on-foreign-machine cases, where the disk is not already trusted.
