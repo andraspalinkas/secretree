@@ -29,7 +29,12 @@ commands:
   member    list | add --request <file> | add --recipient age1... [--signer "ssh-ed25519 ..."] --name <n> | remove --name <n> | request
   share     <path> [--ref <ref>] | --diff <a..b> [--expires 7d] [--note <why>] [--out <file.html>]
   ledger                                # every deliberate disclosure, signed and chained
-  ui        [--listen 127.0.0.1:7391] [--open]   # local code browser over the vault mirror
+  ui        [--listen 127.0.0.1:7391] [--open]   # local code browser + pull requests over the vault mirror
+  pr        open --title <t> [--base main] [--head <branch>] | list [--all] | show <#n> | comment <#n> -m <text> [--path f --line n]
+            approve <#n> [-m] | request-changes <#n> -m | merge <#n> [--method merge|squash|ff] | close <#n>
+  policy    [--approvals 1] [--checks ci]        # writes .secretgit/policy.json (commit it on the base branch)
+  runner    [--name ci] [--cmd <sh>] [--branches main] [--interval 60s] [--once]   # CI agent on a key-holding machine
+  deploy-agent --to <dir> [--branch main] [--cmd <sh>] [--require-check ci] [--once]  # pull-based CD on the target host
   link      <path>[:<line>] [--ref <ref>]        # permalink into the local UI
   version
 
@@ -207,6 +212,86 @@ func main() {
 			os.Exit(2)
 		}
 		err = a.Link(*dir, pos[0], *ref)
+	case "pr":
+		if len(rest) == 0 {
+			fmt.Fprintln(os.Stderr, "usage: secretgit pr open|list|show|comment|approve|request-changes|merge|close")
+			os.Exit(2)
+		}
+		sub, subrest := rest[0], rest[1:]
+		fs := flag.NewFlagSet("pr "+sub, flag.ExitOnError)
+		title := fs.String("title", "", "title")
+		body := fs.String("body", "", "description")
+		msg := fs.String("m", "", "message")
+		base := fs.String("base", "", "base branch (default main)")
+		head := fs.String("head", "", "head branch (default current)")
+		path := fs.String("path", "", "file the comment refers to")
+		line := fs.Int("line", 0, "line the comment refers to")
+		all := fs.Bool("all", false, "include merged and closed")
+		method := fs.String("method", "merge", "merge | squash | ff")
+		pos := parseAll(fs, subrest)
+		ref := ""
+		if len(pos) > 0 {
+			ref = pos[0]
+		}
+		switch sub {
+		case "open":
+			if *title == "" && ref != "" {
+				*title = ref
+			}
+			err = a.PROpen(app.PROpenOptions{Dir: *dir, Title: *title, Body: *body, Base: *base, Head: *head})
+		case "list":
+			err = a.PRList(*dir, *all)
+		case "show":
+			err = a.PRShow(*dir, ref)
+		case "comment":
+			err = a.PRComment(*dir, ref, *msg, *path, *line)
+		case "approve":
+			err = a.PRReview(*dir, ref, "approve", *msg)
+		case "request-changes":
+			err = a.PRReview(*dir, ref, "request_changes", *msg)
+		case "merge":
+			err = a.PRMerge(*dir, ref, *method)
+		case "close":
+			err = a.PRClose(*dir, ref)
+		default:
+			fmt.Fprintln(os.Stderr, "usage: secretgit pr open|list|show|comment|approve|request-changes|merge|close")
+			os.Exit(2)
+		}
+	case "policy":
+		fs := flag.NewFlagSet("policy", flag.ExitOnError)
+		approvals := fs.Int("approvals", 1, "required approvals")
+		checks := fs.String("checks", "ci", "comma-separated required checks (\"\" for none)")
+		must(fs.Parse(rest))
+		var cs []string
+		for _, c := range strings.Split(*checks, ",") {
+			if c = strings.TrimSpace(c); c != "" {
+				cs = append(cs, c)
+			}
+		}
+		err = a.PolicyInit(*dir, *approvals, cs)
+	case "runner":
+		fs := flag.NewFlagSet("runner", flag.ExitOnError)
+		o := app.RunnerOptions{Dir: *dir}
+		fs.StringVar(&o.Name, "name", "ci", "check name")
+		fs.StringVar(&o.Cmd, "cmd", "", "pipeline command (default: .secretgit/ci, then make ci)")
+		branches := fs.String("branches", "main", "comma-separated branches to always check")
+		fs.DurationVar(&o.Interval, "interval", 60*time.Second, "poll interval")
+		fs.DurationVar(&o.Timeout, "timeout", 30*time.Minute, "per-job timeout")
+		fs.BoolVar(&o.Once, "once", false, "one pass, then exit")
+		must(fs.Parse(rest))
+		o.Branches = strings.Split(*branches, ",")
+		err = a.Runner(o)
+	case "deploy-agent":
+		fs := flag.NewFlagSet("deploy-agent", flag.ExitOnError)
+		o := app.DeployOptions{Dir: *dir}
+		fs.StringVar(&o.Branch, "branch", "main", "branch to deploy")
+		fs.StringVar(&o.To, "to", "", "target directory")
+		fs.StringVar(&o.Cmd, "cmd", "", "command to run in the target after export")
+		fs.StringVar(&o.RequireCheck, "require-check", "ci", "deploy only when this check is green (\"\" for none)")
+		fs.DurationVar(&o.Interval, "interval", 60*time.Second, "poll interval")
+		fs.BoolVar(&o.Once, "once", false, "one pass, then exit")
+		must(fs.Parse(rest))
+		err = a.DeployAgent(o)
 	case "version":
 		fmt.Println("secretgit", app.Version)
 	case "help", "-h", "--help":

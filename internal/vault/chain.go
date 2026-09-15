@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"filippo.io/age"
 	"golang.org/x/crypto/ssh"
@@ -102,8 +103,21 @@ type SignerSet struct {
 
 type revoked struct {
 	Key            ssh.PublicKey
+	RevokedAt      time.Time
 	LastGeneration int
 	LastLedger     int
+}
+
+// At returns the keys that were allowed to sign at time t (for
+// collaboration events, which carry their own timestamps).
+func (s *SignerSet) At(t time.Time) []ssh.PublicKey {
+	out := append([]ssh.PublicKey{}, s.Active...)
+	for _, r := range s.Revoked {
+		if !t.After(r.RevokedAt) {
+			out = append(out, r.Key)
+		}
+	}
+	return out
 }
 
 // ForGeneration returns the keys allowed to have signed generation n.
@@ -169,7 +183,7 @@ func LoadMeta(r *Reader, trusted ssh.PublicKey) (*Meta, *SignerSet, error) {
 		if err != nil {
 			return nil, nil, fmt.Errorf("vault.json: revoked signer: %w", err)
 		}
-		set.Revoked = append(set.Revoked, revoked{Key: pubs[0], LastGeneration: rv.LastGeneration, LastLedger: rv.LastLedger})
+		set.Revoked = append(set.Revoked, revoked{Key: pubs[0], RevokedAt: rv.RevokedAt, LastGeneration: rv.LastGeneration, LastLedger: rv.LastLedger})
 	}
 	return &m, set, nil
 }

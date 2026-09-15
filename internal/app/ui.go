@@ -57,8 +57,9 @@ func (a *App) UI(o UIOptions) error {
 	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
 		a.logf("WARNING: listening on %s exposes plaintext source to everyone who can reach that address; use it only on a private network (Tailscale, WireGuard)", o.Listen)
 	}
-	s := &uiServer{repo: repoDir, name: cfg.Label, work: work, source: source}
+	s := &uiServer{repo: repoDir, name: cfg.Label, work: work, source: source, app: a, csrf: newToken()}
 	mux := http.NewServeMux()
+	s.collabRoutes(mux)
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /tree/{rest...}", s.tree)
 	mux.HandleFunc("GET /blob/{rest...}", s.blob)
@@ -90,6 +91,8 @@ func openBrowser(url string) {
 
 type uiServer struct {
 	repo, name, work, source string
+	app                      *App
+	csrf                     string
 }
 
 // splitRefPath resolves "<ref>/<path>" or "<ref-with-slashes>/-/<path>".
@@ -412,12 +415,11 @@ func absRel(work, p string) (string, error) {
 	return filepath.ToSlash(rel), nil
 }
 
-var uiTmpl = template.Must(template.New("ui").Parse(`<!doctype html>
-<meta charset="utf-8"><title>{{.Repo}}: {{.Title}}</title>
-<style>
+// uiCSS is shared by every page.
+const uiCSS = `<style>
 body{font:14px/1.45 -apple-system,system-ui,sans-serif;margin:0;color:#222;background:#fff}
 header{background:#24292f;color:#fff;padding:10px 16px;display:flex;gap:16px;align-items:center}
-header a{color:#fff;text-decoration:none;font-weight:600}header form{margin-left:auto}
+header a{color:#fff;text-decoration:none;font-weight:600}header a.nav{font-weight:400;opacity:.85}header form{margin-left:auto}
 header input{padding:4px 8px;border-radius:4px;border:1px solid #888;width:260px}
 header small{opacity:.7}
 main{padding:12px 16px;max-width:1200px}
@@ -436,7 +438,11 @@ pre.code .t{padding:0 8px}
 .sha{font-family:ui-monospace,Menlo,monospace;color:#666}
 .muted{color:#666}
 </style>
-<header><a href="/">{{.Repo}}</a><small>{{.Source}}</small>
+`
+
+var uiTmpl = template.Must(template.New("ui").Parse(`<!doctype html>
+<meta charset="utf-8"><title>{{.Repo}}: {{.Title}}</title>
+` + uiCSS + `<header><a href="/">{{.Repo}}</a><a href="/pulls" class="nav">pull requests</a><small>{{.Source}}</small>
 <form action="/search"><input name="q" placeholder="search code" value="{{.Query}}"><input type="hidden" name="ref" value="{{if .Ref}}{{.Ref}}{{else}}HEAD{{end}}"></form></header>
 <main>
 {{if .Crumbs}}<nav class="crumbs">{{range $i,$c := .Crumbs}}{{if $i}} / {{end}}<a href="{{$c.URL}}">{{$c.Name}}</a>{{end}}

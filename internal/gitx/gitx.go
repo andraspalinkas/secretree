@@ -55,12 +55,23 @@ func Env() []string {
 	return append(env, "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
 }
 
+// RunEnv executes git with extra environment entries (e.g. GIT_INDEX_FILE).
+func RunEnv(dir string, extra []string, stdin []byte, args ...string) (string, error) {
+	out, _, err := runEnv(dir, extra, stdin, args...)
+	return out, err
+}
+
 func run(dir string, stdin []byte, args ...string) (string, string, error) {
+	return runEnv(dir, nil, stdin, args...)
+}
+
+func runEnv(dir string, extra []string, stdin []byte, args ...string) (string, string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(Env(),
 		"GIT_CONFIG_PARAMETERS='commit.gpgsign=false' 'tag.gpgsign=false' 'core.hooksPath=/dev/null'",
 	)
+	cmd.Env = append(cmd.Env, extra...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
