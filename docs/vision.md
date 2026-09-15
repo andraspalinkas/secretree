@@ -219,3 +219,99 @@ The order is deliberate: each layer is useful on its own, and each is a
 prerequisite for the next. A team can stop at 2 (private hosted git with a
 normal workflow) or 3 (plus reviews) and already have something no forge
 offers.
+
+## Softening the four losses
+
+Each loss above has a mitigation. None of them is "the host reads the code
+after all"; each is a deliberate, logged, revocable disclosure, or a way to
+get the same convenience from a machine that already holds a key.
+
+### 1. The host's web UI for code
+
+- **Permalinks that work for everyone with a key.** The local UI mirrors
+  the host's URL shapes (`/blob/<ref>/<path>#L10`, `/pull/12`,
+  `/commit/<sha>`). A static redirector page on the host itself (GitHub
+  Pages, a one-file site) turns `https://team.example/app/blob/...` into
+  `http://localhost:<port>/...`. Links pasted in chat open on any
+  teammate's machine, and reveal nothing to the host beyond a path hit.
+- **One UI for the whole team, behind the key.** The runner box (which
+  already holds a key) serves the same UI on the team's private network
+  (Tailscale/WireGuard). One URL, works from a phone, zero-knowledge toward
+  the cloud, and you did not deploy a forge: it is a read-mostly viewer over
+  the mirror plus the collab data.
+- **Search and blame that beat the host's.** A local index (ripgrep /
+  zoekt) over the mirror is instant and searches every branch, which no
+  hosted search does well.
+- **The IDE is the UI.** Most reviewing already happens in an editor; the
+  extension covers blame, history, PRs and comments in place.
+
+### 2. Hosted runner scale
+
+- **Warm beats big.** A few owned machines with persistent caches (deps,
+  Docker layers, build caches) routinely outrun cold hosted runners. The
+  runner agent manages a fleet: queue in the collab data, one job per
+  machine, retries, priorities.
+- **Ephemeral cloud runners that you launch.** The agent can create a VM
+  per job (Hetzner, AWS spot, any IaaS), hand it a *job-scoped* key over an
+  encrypted channel, run, destroy. This shifts trust from the git host to
+  the IaaS provider for the job's duration. That is an honest trade, and a
+  smaller one: the VM holds one commit for minutes, not the whole history
+  forever.
+- **Confidential VMs close the gap.** AMD SEV-SNP / Intel TDX instances
+  with remote attestation exist today on the big clouds. The agent releases
+  the job key only to a VM whose measurement it verified. This is layer 5
+  in the roadmap, but the building blocks are available now.
+- **Split by sensitivity.** A path policy can mark parts of a monorepo as
+  public (docs, open-source components); those jobs may run on hosted
+  runners with plaintext. The policy is a signed file in the repo.
+
+### 3. The integration marketplace
+
+- **Most integrations have a CLI or self-hosted form**: Renovate,
+  Dependabot-equivalents, CodeQL, Semgrep, Trivy, SonarQube, coverage
+  tools, LLM reviewers via API. They run as jobs on the runner; their
+  output lands in the collab data as checks, comments or PRs (Renovate
+  opening a PR through the remote helper simply works). secretgit ships
+  **recipes**: `secretgit integrate renovate` adds the job and the policy
+  entry.
+- **Scoped disclosure instead of source access.** An external service that
+  needs *something* gets a derived artifact, never the tree: coverage
+  percentages, test counts, an SBOM, dependency versions. Each export is
+  declared in a signed **disclosure policy**, reviewed like code, and every
+  actual export is logged. The UI shows the "plaintext budget": what leaves,
+  where, how often.
+- **You pick who sees code, explicitly.** Want an LLM review? The runner
+  calls the provider you chose, with the diff you chose, under a logged
+  policy entry. The difference from a marketplace app is not that nobody
+  sees the code; it is that no one sees it as a side effect of hosting.
+- **Deploy previews and error tracking** are builds and source maps, which
+  are code. They go to infrastructure you control (the deploy agent can
+  publish previews to your own edge host) or through the same explicit
+  disclosure policy.
+
+### 4. "Anyone with the link can view"
+
+- **Share links with the key in the fragment.** `secretgit share <ref|path|pr> --expires 7d`
+  encrypts a self-contained snapshot to a fresh one-off key, uploads the
+  blob to the host (or any static storage), and produces
+  `https://viewer.example/#<blob-id>.<key>`. The fragment never reaches a
+  server; a static viewer page decrypts in the browser (the PrivateBin /
+  Bitwarden Send pattern). Expiring, revocable (delete the blob),
+  optionally password-wrapped, and logged as a disclosure. The viewer is a
+  static page you can self-host and pin.
+- **Guest keys with scope and expiry.** A contractor gets a recipient key
+  valid for a branch or a path subset for a time window; secretgit issues a
+  dedicated snapshot chain for that scope rather than granting access to
+  the main chain, so revocation is real.
+- **Public mirrors of public parts.** The runner publishes plaintext copies
+  of paths marked public (docs, SDKs) to an ordinary repo on the host,
+  automatically and only those paths.
+
+### The common thread: a disclosure ledger
+
+Every one of these mitigations is a *deliberate* exposure: a share link, an
+integration export, a public path, an ephemeral cloud runner. secretgit
+records each as a signed event in the collab data and shows the ledger in
+`status` and the UI. The product claim becomes precise: not "nothing ever
+leaves", but "nothing leaves without a policy, a signature and a log entry",
+and the host never gets anything as a side effect of hosting.
