@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"secretgit/internal/app"
@@ -20,14 +21,26 @@ commands:
   verify    [--generation N] [--quick]
   restore   --vault <url|dir> --to <dir> [--repo-id <id>] [--generation N] [--from-recovery-kit <file>] [--no-state]
   status
+  clone     <vault-url> [dir] [--repo-id <id>] [--from-recovery-kit <file>]
+  install-helper [--dir <bindir>]     # makes "git clone secretgit::<vault-url>" work
   schedule  --every <duration> | --daily HH:MM | --remove | --show
   version
 
 The vault is a git repository (SSH/HTTPS URL or a local directory) that only
-ever sees ciphertext. Docs: docs/vault-format.md, docs/restore-by-hand.md.
+ever sees ciphertext. With the helper installed, a vault is an ordinary git
+remote: git remote add origin secretgit::<vault-url>[#<repo-id>] Docs: docs/vault-format.md, docs/restore-by-hand.md.
 `
 
 func main() {
+	// git invokes us as git-remote-secretgit <name> <url>
+	if filepath.Base(os.Args[0]) == app.HelperName && len(os.Args) == 3 {
+		a := &app.App{Out: os.Stderr, Err: os.Stderr}
+		if err := a.RemoteHelper(os.Args[1], os.Args[2], os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "secretgit: %s\n", strings.TrimSpace(err.Error()))
+			os.Exit(1)
+		}
+		return
+	}
 	global := flag.NewFlagSet("secretgit", flag.ContinueOnError)
 	global.SetOutput(os.Stderr)
 	dir := global.String("C", "", "run as if started in this directory")
@@ -82,6 +95,31 @@ func main() {
 		err = a.Restore(o)
 	case "status":
 		err = a.Status(*dir)
+	case "clone":
+		fs := flag.NewFlagSet("clone", flag.ExitOnError)
+		o := app.CloneOptions{}
+		fs.StringVar(&o.RepoID, "repo-id", "", "which repository (when the vault holds several)")
+		fs.StringVar(&o.KitIn, "from-recovery-kit", "", "recovery kit file to import first")
+		must(fs.Parse(rest))
+		if fs.NArg() < 1 {
+			fmt.Fprintln(os.Stderr, "usage: secretgit clone <vault-url> [dir]")
+			os.Exit(2)
+		}
+		o.VaultURL = fs.Arg(0)
+		o.Dir = fs.Arg(1)
+		err = a.Clone(o)
+	case "install-helper":
+		fs := flag.NewFlagSet("install-helper", flag.ExitOnError)
+		d := fs.String("dir", "", "directory for the git-remote-secretgit symlink (default: next to this binary)")
+		must(fs.Parse(rest))
+		err = a.InstallHelperCmd(*d)
+	case "remote-helper":
+		if len(rest) != 2 {
+			fmt.Fprintln(os.Stderr, "usage: secretgit remote-helper <name> <url>   (normally invoked by git)")
+			os.Exit(2)
+		}
+		a.Out = os.Stderr
+		err = a.RemoteHelper(rest[0], rest[1], os.Stdin, os.Stdout)
 	case "schedule":
 		fs := flag.NewFlagSet("schedule", flag.ExitOnError)
 		o := app.ScheduleOptions{Dir: *dir}

@@ -10,6 +10,9 @@ import (
 	"secretgit/internal/gitx"
 )
 
+// errPushRejected means another writer appended to the vault first.
+var errPushRejected = errors.New("vault rejected the push: another writer appended a generation first")
+
 // ensureRemote makes a local-path vault URL usable: a missing directory
 // becomes a fresh bare repository. Network URLs are left alone.
 func ensureRemote(url string) (string, error) {
@@ -157,6 +160,10 @@ func commitPush(cacheDir, branch string, files []string) error {
 		return err
 	}
 	if _, err := gitx.Run(cacheDir, "push", "--quiet", "origin", "HEAD:refs/heads/"+branch); err != nil {
+		var ge *gitx.Error
+		if errors.As(err, &ge) && (strings.Contains(ge.Stderr, "[rejected]") || strings.Contains(ge.Stderr, "non-fast-forward") || strings.Contains(ge.Stderr, "fetch first")) {
+			return errPushRejected
+		}
 		return fmt.Errorf("push to vault: %w", err)
 	}
 	// forget the worktree copies; the index and HEAD already reflect them

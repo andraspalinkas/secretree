@@ -50,6 +50,7 @@ type Paths struct {
 	Config string
 	Status string
 	Cache  string // vault working clone
+	Mirror string // plaintext bare mirror of the vault's logical state (sync)
 	Tmp    string
 }
 
@@ -61,6 +62,7 @@ func NewPaths(gitDir string) Paths {
 		Config: filepath.Join(root, "config.json"),
 		Status: filepath.Join(root, "status.json"),
 		Cache:  filepath.Join(root, "vault-cache"),
+		Mirror: filepath.Join(root, "mirror"),
 		Tmp:    filepath.Join(root, "tmp"),
 	}
 }
@@ -132,4 +134,31 @@ func writeJSON(path string, v any) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// MirrorState records which generation the mirror reflects.
+type MirrorState struct {
+	AppliedGeneration int    `json:"applied_generation"`
+	AppliedHash       string `json:"applied_manifest_sha256"`
+}
+
+// LoadMirrorState reads mirror-state.json; missing means nothing applied.
+func LoadMirrorState(p Paths) (*MirrorState, error) {
+	data, err := os.ReadFile(filepath.Join(p.Root, "mirror-state.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return &MirrorState{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var m MirrorState
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// SaveMirrorState writes mirror-state.json.
+func SaveMirrorState(p Paths, m *MirrorState) error {
+	return writeJSON(filepath.Join(p.Root, "mirror-state.json"), m)
 }

@@ -77,6 +77,17 @@ func (a *App) openRepo(dir string) (*repo, error) {
 	if err != nil {
 		return nil, err
 	}
+	return a.openRepoAt(work, gitDir)
+}
+
+// openRepoGitDir opens a repository by its git dir (remote-helper mode,
+// where a work tree may not exist yet).
+func (a *App) openRepoGitDir(gitDir string) (*repo, error) {
+	return a.openRepoAt(filepath.Dir(gitDir), gitDir)
+}
+
+func (a *App) openRepoAt(work, gitDir string) (*repo, error) {
+	var err error
 	paths := config.NewPaths(gitDir)
 	cfg, err := config.Load(paths)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"secretgit/internal/config"
@@ -58,8 +59,7 @@ func (a *App) Init(o InitOptions) error {
 	var kb *keys.Bundle
 	var meta *vault.Meta
 	newVault := false
-	switch {
-	case empty:
+	if empty {
 		if o.KitIn != "" {
 			return errors.New("the vault is empty but --from-recovery-kit was given; omit it to create a new vault")
 		}
@@ -77,45 +77,8 @@ func (a *App) Init(o InitOptions) error {
 		if meta, err = a.bootstrapVault(reader, kb, branch, url); err != nil {
 			return err
 		}
-	default:
-		raw, err := reader.ReadFile(vault.MetaFile)
-		if err != nil {
-			return fmt.Errorf("the remote has commits but no %s: not a secretgit vault", vault.MetaFile)
-		}
-		var m vault.Meta
-		if err := json.Unmarshal(raw, &m); err != nil {
-			return fmt.Errorf("vault.json: %w", err)
-		}
-		if o.KitIn != "" {
-			text, err := os.ReadFile(o.KitIn)
-			if err != nil {
-				return err
-			}
-			kb, _, err = keys.ParseRecoveryKit(string(text))
-			if err != nil {
-				return err
-			}
-			if kb.VaultID != m.VaultID {
-				return fmt.Errorf("recovery kit is for vault %s but the remote holds vault %s", kb.VaultID, m.VaultID)
-			}
-			if err := store.Put(kb); err != nil {
-				return err
-			}
-			a.logf("keys from recovery kit stored in %s", store.Describe())
-		} else {
-			kb, err = store.Get(m.VaultID)
-			if errors.Is(err, keystore.ErrNotFound) {
-				return fmt.Errorf("vault %s exists but its keys are not in the %s; pass --from-recovery-kit <file>", m.VaultID, store.Describe())
-			}
-			if err != nil {
-				return err
-			}
-		}
-		pub, err := kb.PublicKey()
-		if err != nil {
-			return err
-		}
-		if meta, _, err = vault.LoadMeta(reader, pub); err != nil {
+	} else {
+		if kb, meta, err = a.joinVault(store, reader, o.KitIn); err != nil {
 			return err
 		}
 	}
@@ -220,4 +183,113 @@ func (a *App) bootstrapVault(reader *vault.Reader, kb *keys.Bundle, branch, url 
 		return nil, err
 	}
 	return meta, nil
+}
+
+// joinVault loads the keys for an existing vault, importing a recovery kit
+// when given, and verifies vault.json against our signing key.
+func (a *App) joinVault(store keystore.Store, reader *vault.Reader, kitIn string) (*keys.Bundle, *vault.Meta, error) {
+	raw, err := reader.ReadFile(vault.MetaFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("the remote has commits but no %s: not a secretgit vault", vault.MetaFile)
+	}
+	var m vault.Meta
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, nil, fmt.Errorf("vault.json: %w", err)
+	}
+	var kb *keys.Bundle
+	if kitIn != "" {
+		text, err := os.ReadFile(kitIn)
+		if err != nil {
+			return nil, nil, err
+		}
+		kb, _, err = keys.ParseRecoveryKit(string(text))
+		if err != nil {
+			return nil, nil, err
+		}
+		if kb.VaultID != m.VaultID {
+			return nil, nil, fmt.Errorf("recovery kit is for vault %s but the remote holds vault %s", kb.VaultID, m.VaultID)
+		}
+		if err := store.Put(kb); err != nil {
+			return nil, nil, err
+		}
+		a.logf("keys from recovery kit stored in %s", store.Describe())
+	} else {
+		kb, err = store.Get(m.VaultID)
+		if errors.Is(err, keystore.ErrNotFound) {
+			return nil, nil, fmt.Errorf("vault %s exists but its keys are not in the %s; pass --from-recovery-kit <file>, or `secretgit join` on a new device", m.VaultID, store.Describe())
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	pub, err := kb.PublicKey()
+	if err != nil {
+		return nil, nil, err
+	}
+	meta, _, err := vault.LoadMeta(reader, pub)
+	if err != nil {
+		return nil, nil, err
+	}
+	return kb, meta, nil
+}
+
+// autoInit configures a repository the first time the remote helper runs
+// in it (typically during `git clone secretgit::...`).
+func (a *App) autoInit(gitDir, helperURL string) error {
+	vaultURL, repoID := ParseHelperURL(helperURL)
+	url, err := ensureRemote(vaultURL)
+	if err != nil {
+		return err
+	}
+	paths := config.NewPaths(gitDir)
+	store, err := keystore.Open()
+	if err != nil {
+		return err
+	}
+	branch, empty, err := syncCache(url, paths.Cache, "")
+	if err != nil {
+		return err
+	}
+	if empty {
+		return fmt.Errorf("%s is an empty vault; run `secretgit init --vault %s` in a repository first", url, vaultURL)
+	}
+	reader := &vault.Reader{Dir: paths.Cache}
+	kb, meta, err := a.joinVault(store, reader, "")
+	if err != nil {
+		return err
+	}
+	ids, err := reader.ListRepos()
+	if err != nil {
+		return err
+	}
+	label := filepath.Base(filepath.Dir(gitDir))
+	switch {
+	case repoID != "":
+		found := false
+		for _, id := range ids {
+			if id == repoID {
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("repo id %s not found in the vault (available: %s)", repoID, strings.Join(ids, ", "))
+		}
+	case len(ids) == 1:
+		repoID = ids[0]
+	case len(ids) == 0:
+		return fmt.Errorf("the vault holds no repositories yet; run `secretgit init --vault %s` in a repository first", vaultURL)
+	default:
+		return fmt.Errorf("the vault holds several repositories; use secretgit::%s#<repo-id> (available: %s)", vaultURL, strings.Join(ids, ", "))
+	}
+	if id, err := kb.Identity(); err == nil {
+		if pub, err := kb.PublicKey(); err == nil {
+			if _, signers, err := vault.LoadMeta(reader, pub); err == nil {
+				if c, err := vault.LoadChain(reader, meta.VaultID, repoID, id, signers); err == nil && c.Last() != nil && c.Last().Manifest.Source.Label != "" {
+					label = c.Last().Manifest.Source.Label
+				}
+			}
+		}
+	}
+	cfg := &config.Config{VaultURL: url, VaultBranch: branch, VaultID: meta.VaultID, RepoID: repoID, Label: label, FullEvery: 20, FullRatio: 1.0}
+	return config.Save(paths, cfg)
 }

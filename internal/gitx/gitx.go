@@ -37,12 +37,28 @@ func RunIn(dir string, stdin []byte, args ...string) (string, error) {
 	return out, err
 }
 
+// Env is the environment for every git we spawn: the caller's environment
+// minus repository-selecting variables (a remote helper inherits GIT_DIR
+// from git, which must not leak into commands we run on other repos).
+func Env() []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		k, _, _ := strings.Cut(kv, "=")
+		switch k {
+		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+			"GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_PREFIX",
+			"GIT_COMMON_DIR", "GIT_IMPLICIT_WORK_TREE", "GIT_QUARANTINE_PATH":
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+}
+
 func run(dir string, stdin []byte, args ...string) (string, string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
-		"GIT_TERMINAL_PROMPT=0",
-		"LC_ALL=C",
+	cmd.Env = append(Env(),
 		"GIT_CONFIG_PARAMETERS='commit.gpgsign=false' 'tag.gpgsign=false' 'core.hooksPath=/dev/null'",
 	)
 	if stdin != nil {
@@ -64,7 +80,7 @@ func RunToFile(dir, path string, args ...string) error {
 	}
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	cmd.Env = Env()
 	var errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = f, &errb
 	err = cmd.Run()
