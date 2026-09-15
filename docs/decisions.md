@@ -131,3 +131,41 @@ the team's existing pipeline files (`act` for GitHub workflows, make/just).
 Logs and artifacts go back encrypted. Registering as a host's self-hosted
 runner is a supported hybrid with documented metadata leakage. Keys are
 never placed in a host's secrets store.
+
+## 0016 — Remote helper uses fetch/push, not connect — accepted (2026-09-15)
+
+The helper implements `list`, `fetch` and `push` and moves objects with an
+internal `git fetch`/`git push` against the local mirror. `connect` would
+have been fewer lines but reports vault-level rejections only through the
+helper's exit status, after git already printed success. With `push`, a
+rejected vault append is reported per ref the way any remote reports a
+non-fast-forward.
+
+## 0017 — Per-device keys; late members see an opaque past — accepted (2026-09-15)
+
+Every device generates its own age identity and signing key (`join`). A
+member added later cannot read generations encrypted before their key was
+a recipient; those are verified but opaque, and `member add` writes a full
+generation to the new set at once. Re-encrypting history for newcomers is
+a deliberate, separate action (not yet implemented), never a side effect.
+
+## 0018 — Revocation keeps old signatures valid up to a cut-off — accepted (2026-09-15)
+
+Removing a member moves their signer line into `revoked_signers` with the
+last generation and ledger entry they may have signed. History stays
+verifiable; a revoked key that still has host push access cannot append
+anything the other members will accept.
+
+## 0019 — Share pages are self-contained files with the key in the fragment — accepted (2026-09-15)
+
+No secretgit-hosted viewer and no dependency on the vault host serving
+plaintext-fetchable blobs: the page carries viewer and ciphertext, decrypts
+in the browser with age-encryption (loaded from jsDelivr, pinned by
+version; self-hosting the viewer is the hardening path). Every share is a
+ledger entry.
+
+## 0020 — Local UI is read-only and loopback by default — accepted (2026-09-15)
+
+`secretgit ui` serves the mirror on 127.0.0.1 with forge-shaped URLs. A
+non-loopback listen address is allowed for private networks and prints a
+warning. Writes (PRs, reviews) will come with the collaboration layer.

@@ -33,6 +33,30 @@ type Meta struct {
 	Created        time.Time `json:"created"`
 	Recipients     []string  `json:"recipients"`
 	AllowedSigners []string  `json:"allowed_signers"`
+	Members        []Member  `json:"members,omitempty"`
+	// RevokedSigners keeps former signers so that what they signed while
+	// they were members still verifies; nothing after LastGeneration /
+	// LastLedger may carry their signature.
+	RevokedSigners []RevokedSigner `json:"revoked_signers,omitempty"`
+}
+
+// RevokedSigner is a former allowed_signers line with its cut-off points.
+type RevokedSigner struct {
+	Line           string    `json:"line"`
+	Fingerprint    string    `json:"fingerprint"`
+	RevokedAt      time.Time `json:"revoked_at"`
+	LastGeneration int       `json:"last_generation"`
+	LastLedger     int       `json:"last_ledger"`
+}
+
+// Member pairs a recipient with a name and its device's signer, for
+// display and removal. Optional; the recipients and allowed_signers lists
+// remain authoritative.
+type Member struct {
+	Name              string    `json:"name,omitempty"`
+	Recipient         string    `json:"recipient"`
+	SignerFingerprint string    `json:"signer_fingerprint,omitempty"`
+	Added             time.Time `json:"added"`
 }
 
 // Manifest describes one generation. It is encrypted, then signed.

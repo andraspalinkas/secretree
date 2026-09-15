@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"filippo.io/age"
-	"golang.org/x/crypto/ssh"
 
 	"secretgit/internal/archive"
 	"secretgit/internal/config"
@@ -23,7 +22,7 @@ import (
 type vaultState struct {
 	Branch     string
 	Meta       *vault.Meta
-	Signers    []ssh.PublicKey
+	Signers    *vault.SignerSet
 	Recipients []age.Recipient
 	Chain      *vault.Chain
 	Reader     *vault.Reader
@@ -119,7 +118,7 @@ func (a *App) writeGeneration(r *repo, vs *vaultState, status *config.Status, o 
 			if err != nil {
 				return nil, err
 			}
-			stateChanged = last == nil || last.Manifest.File(vault.RoleState) == nil || last.Manifest.File(vault.RoleState).PlaintextSHA256 != h
+			stateChanged = last == nil || last.Opaque() || last.Manifest.File(vault.RoleState) == nil || last.Manifest.File(vault.RoleState).PlaintextSHA256 != h
 		}
 	}
 
@@ -147,7 +146,10 @@ func (a *App) writeGeneration(r *repo, vs *vaultState, status *config.Status, o 
 			}
 		}
 	}
-	refsChanged := last == nil || gitx.DiffRefs(last.Manifest.Refs, refs) != "" || last.Manifest.Source.Head != head
+	refsChanged := last == nil || last.Opaque() || gitx.DiffRefs(last.Manifest.Refs, refs) != "" || last.Manifest.Source.Head != head
+	if last != nil && last.Opaque() && kind != vault.KindFull {
+		return nil, errors.New("previous generation is unreadable; a full generation is required")
+	}
 	if kind == vault.KindIncremental && bundleFile == "" && !refsChanged && !stateChanged {
 		return &genResult{Number: last.Num, Kind: last.Manifest.Kind, Refs: refs, ManifestHash: last.ManifestCipherHash, Skipped: true}, nil
 	}
@@ -258,8 +260,14 @@ func (a *App) decideKind(r *repo, chain *vault.Chain, status *config.Status, sou
 	var lastFull *vault.Generation
 	incCount := 0
 	var incBytes, fullBytes int64
+	if last.Opaque() {
+		return vault.KindFull, "previous generation is not readable by this key"
+	}
 	for i := range chain.Gens {
 		g := &chain.Gens[i]
+		if g.Opaque() {
+			continue
+		}
 		if g.Manifest.Kind == vault.KindFull {
 			lastFull, incCount, incBytes = g, 0, 0
 			fullBytes = 0

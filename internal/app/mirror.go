@@ -59,6 +59,9 @@ func (a *App) mirrorSync(r *repo, vs *vaultState) error {
 	} else {
 		for _, g := range chain.Gens {
 			if g.Num > ms.AppliedGeneration {
+				if g.Opaque() {
+					return fmt.Errorf("generation %06d is not readable by this key", g.Num)
+				}
 				plan = append(plan, g)
 			}
 		}

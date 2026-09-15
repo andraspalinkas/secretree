@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"secretgit/internal/app"
 )
@@ -24,6 +25,12 @@ commands:
   clone     <vault-url> [dir] [--repo-id <id>] [--from-recovery-kit <file>]
   install-helper [--dir <bindir>]     # makes "git clone secretgit::<vault-url>" work
   schedule  --every <duration> | --daily HH:MM | --remove | --show
+  join      --vault <url|dir> [--name <device>] [--out <file>]   # new device: keys + join request
+  member    list | add --request <file> | add --recipient age1... [--signer "ssh-ed25519 ..."] --name <n> | remove --name <n> | request
+  share     <path> [--ref <ref>] | --diff <a..b> [--expires 7d] [--note <why>] [--out <file.html>]
+  ledger                                # every deliberate disclosure, signed and chained
+  ui        [--listen 127.0.0.1:7391] [--open]   # local code browser over the vault mirror
+  link      <path>[:<line>] [--ref <ref>]        # permalink into the local UI
   version
 
 The vault is a git repository (SSH/HTTPS URL or a local directory) that only
@@ -100,13 +107,15 @@ func main() {
 		o := app.CloneOptions{}
 		fs.StringVar(&o.RepoID, "repo-id", "", "which repository (when the vault holds several)")
 		fs.StringVar(&o.KitIn, "from-recovery-kit", "", "recovery kit file to import first")
-		must(fs.Parse(rest))
-		if fs.NArg() < 1 {
+		pos := parseAll(fs, rest)
+		if len(pos) < 1 {
 			fmt.Fprintln(os.Stderr, "usage: secretgit clone <vault-url> [dir]")
 			os.Exit(2)
 		}
-		o.VaultURL = fs.Arg(0)
-		o.Dir = fs.Arg(1)
+		o.VaultURL = pos[0]
+		if len(pos) > 1 {
+			o.Dir = pos[1]
+		}
 		err = a.Clone(o)
 	case "install-helper":
 		fs := flag.NewFlagSet("install-helper", flag.ExitOnError)
@@ -129,6 +138,75 @@ func main() {
 		fs.BoolVar(&o.Show, "show", false, "print the installed schedule")
 		must(fs.Parse(rest))
 		err = a.Schedule(o)
+	case "join":
+		fs := flag.NewFlagSet("join", flag.ExitOnError)
+		o := app.JoinOptions{}
+		fs.StringVar(&o.VaultURL, "vault", "", "vault git URL or directory")
+		fs.StringVar(&o.Name, "name", "", "this device's name (shown to members)")
+		fs.StringVar(&o.Out, "out", "", "write the join request to a file")
+		pos := parseAll(fs, rest)
+		if o.VaultURL == "" && len(pos) == 1 {
+			o.VaultURL = pos[0]
+		}
+		err = a.Join(o)
+	case "member":
+		if len(rest) == 0 {
+			fmt.Fprintln(os.Stderr, "usage: secretgit member list|add|remove|request")
+			os.Exit(2)
+		}
+		sub, subrest := rest[0], rest[1:]
+		fs := flag.NewFlagSet("member "+sub, flag.ExitOnError)
+		o := app.MemberOptions{Dir: *dir}
+		fs.StringVar(&o.Request, "request", "", "join request file")
+		fs.StringVar(&o.Recipient, "recipient", "", "age public key")
+		fs.StringVar(&o.Signer, "signer", "", "ssh public key line")
+		fs.StringVar(&o.Name, "name", "", "member name")
+		must(fs.Parse(subrest))
+		switch sub {
+		case "list":
+			err = a.MemberList(*dir)
+		case "add":
+			err = a.MemberAdd(o)
+		case "remove":
+			err = a.MemberRemove(o)
+		case "request":
+			err = a.MemberRequest(*dir)
+		default:
+			fmt.Fprintln(os.Stderr, "usage: secretgit member list|add|remove|request")
+			os.Exit(2)
+		}
+	case "share":
+		fs := flag.NewFlagSet("share", flag.ExitOnError)
+		o := app.ShareOptions{Dir: *dir}
+		fs.StringVar(&o.Ref, "ref", "", "ref or commit (default HEAD)")
+		fs.StringVar(&o.Diff, "diff", "", "share a diff: <a..b> or a commit")
+		fs.DurationVar(&o.Expires, "expires", 7*24*time.Hour, "advisory expiry (0 = none)")
+		fs.StringVar(&o.Note, "note", "", "why this is being shared (goes into the ledger)")
+		fs.StringVar(&o.Out, "out", "", "output HTML file")
+		fs.BoolVar(&o.NoLedger, "no-ledger", false, "do not record the disclosure (not recommended)")
+		pos := parseAll(fs, rest)
+		if len(pos) > 0 {
+			o.Path = pos[0]
+		}
+		err = a.Share(o)
+	case "ledger":
+		err = a.Ledger(*dir)
+	case "ui":
+		fs := flag.NewFlagSet("ui", flag.ExitOnError)
+		o := app.UIOptions{Dir: *dir}
+		fs.StringVar(&o.Listen, "listen", app.DefaultUIAddr, "address to listen on (keep it loopback unless on a private network)")
+		fs.BoolVar(&o.Open, "open", false, "open in the browser")
+		must(fs.Parse(rest))
+		err = a.UI(o)
+	case "link":
+		fs := flag.NewFlagSet("link", flag.ExitOnError)
+		ref := fs.String("ref", "", "ref (default: current commit, for a permanent link)")
+		pos := parseAll(fs, rest)
+		if len(pos) != 1 {
+			fmt.Fprintln(os.Stderr, "usage: secretgit link <path>[:<line>] [--ref <ref>]")
+			os.Exit(2)
+		}
+		err = a.Link(*dir, pos[0], *ref)
 	case "version":
 		fmt.Println("secretgit", app.Version)
 	case "help", "-h", "--help":
@@ -146,5 +224,19 @@ func main() {
 func must(err error) {
 	if err != nil {
 		os.Exit(2)
+	}
+}
+
+// parseAll lets flags and positional arguments be interleaved, the way
+// git's own commands behave: `secretgit share src/x.go --out page.html`.
+func parseAll(fs *flag.FlagSet, args []string) []string {
+	var positional []string
+	for {
+		must(fs.Parse(args))
+		if fs.NArg() == 0 {
+			return positional
+		}
+		positional = append(positional, fs.Arg(0))
+		args = fs.Args()[1:]
 	}
 }

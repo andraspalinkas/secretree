@@ -65,10 +65,10 @@ rides the same chain.
 │  3. collab: PRs, reviews, checks  git-native, encrypted,    │
 │     + local UI / IDE extension    notifications by webhook  │
 ├─────────────────────────────────────────────────────────────┤
-│  2. sync: git remote helper       git push/fetch on the     │
-│     + team keys                   chain; multi-writer CAS   │
+│  2. sync: git remote helper       built ✔  + share, ledger, │
+│     + team keys                   read-only local UI        │
 ├─────────────────────────────────────────────────────────────┤
-│  1. vault: chain format, backup,  built ✔  (secretgit 0.1)  │
+│  1. vault: chain format, backup,  built ✔                   │
 │     verify, restore proof, keys                             │
 └─────────────────────────────────────────────────────────────┘
         dumb storage: GitHub / GitLab / S3 / rclone / a folder
@@ -206,9 +206,11 @@ Everything in `docs/threat-model.md` holds. With a team, add:
 
 ## Roadmap
 
-1. **Vault** — done (0.1): format, backup, verify, restore proof, keys, schedule.
-2. **Sync** — remote helper with `connect`, multi-writer CAS, team recipients
-   and signers, invitations, device revocation, `secretgit clone`.
+1. **Vault** — done: format, backup, verify, restore proof, keys, schedule.
+2. **Sync** — done: remote helper, multi-writer CAS, per-device keys,
+   `join` / `member add|remove`, revocation, `secretgit clone`.
+   Also done from the mitigations: `share` pages with a disclosure ledger,
+   and the read-only local UI with permalinks.
 3. **Collab** — documented PR/review data model, CLI, local UI (PR list,
    diff, comments, approvals), webhook notifier, policy verification.
 4. **Runner + deploy** — runner agent with `act`/make pipelines, encrypted

@@ -93,6 +93,33 @@ trust root for a fresh clone on a fresh machine is therefore the **signing
 public key fingerprint printed on the recovery kit**, not the file itself.
 Verify the fingerprint first, then the file.
 
+### 3.1 Members and revoked signers (optional fields)
+
+`members` pairs each recipient with a display name and its device's signer
+fingerprint, for `member list` and `member remove`. It is informational;
+`recipients` and `allowed_signers` stay authoritative.
+
+`revoked_signers` keeps former signer lines together with cut-off points:
+
+```json
+"revoked_signers": [
+  {"line": "secretgit namespaces=\"secretgit-v1\" ssh-ed25519 AAAA… laptop-b",
+   "fingerprint": "SHA256:…", "revoked_at": "2026-09-15T12:00:00Z",
+   "last_generation": 4, "last_ledger": 1}
+]
+```
+
+A signature by a revoked key is accepted on generations `≤ last_generation`
+and ledger entries `≤ last_ledger`, never later. This keeps the past
+verifiable after a member leaves while denying them any future write, even
+if they still hold a push credential for the host.
+
+A member added later cannot decrypt manifests written before their key was
+a recipient. Such generations are **opaque** to them: signature and hash
+chain are still verified, contents are not readable, and their restores
+start from the first full generation encrypted to them. `member add`
+writes such a full generation immediately.
+
 ## 4. Manifest
 
 Plaintext JSON, encrypted with age to all recipients → `NNNNNN.manifest.age`,
@@ -247,6 +274,25 @@ current ref map. `status` records the timestamp and generation of the last
 successful proof; a backup without a green proof is reported as **failed**
 even if the push succeeded.
 
+## 9.1 Disclosure ledger
+
+`repos/<repo-id>/ledger/NNNNNN.json.age` (+ `.sig`) records deliberate
+plaintext disclosures (`share`, later exports and public mirrors). Entries
+are encrypted to recipients, signed by the acting device and hash-chained
+through `prev_sha256`, exactly like manifests, so the ledger can be neither
+forged nor silently trimmed. Entry fields: `seq`, `kind`, `created`,
+`actor` (signer fingerprint), `actor_name`, `subject`, `expires`, `note`.
+
+## 9.2 Share pages
+
+`share` never touches the vault format beyond a ledger entry. It produces a
+self-contained HTML file: a static viewer plus an ASCII-armored age
+ciphertext of a JSON snapshot (`type`, `title`, `subject`, `ref`, `commit`,
+`created`, `expires`, `note`, `content`) encrypted to a fresh one-off X25519
+key. The key travels in the link fragment (`#AGE-SECRET-KEY-1…`), which
+browsers never send to servers, or by another channel. The page is safe to
+host anywhere.
+
 ## 10. Local state (not on the remote)
 
 Kept in the source repo's `.git/secretgit/` (so it follows the repo and is
@@ -256,7 +302,10 @@ never committed):
   `full_every`, schedule.
 - `status.json`: last generation written, last proof time and generation,
   last error.
-- A cache clone of the vault repo (shallow or partial) to avoid re-cloning.
+- `vault-cache/`: a partial, checkout-less clone of the vault.
+- `mirror/`: a plaintext bare repository reflecting the chain's latest
+  generation; the remote helper fetches from and pushes into it.
+  `mirror-state.json` records which generation it reflects.
 
 Key material lives only in the OS key store under service `secretgit`,
 accounts `<vault_id>/age-identity` and `<vault_id>/signing-key`, and on the

@@ -94,7 +94,7 @@ func (a *App) Verify(o VerifyOptions) error {
 	if err != nil {
 		return err
 	}
-	a.logf("vault.json: signed, %d recipient(s), %d signer(s)", len(meta.Recipients), len(signers))
+	a.logf("vault.json: signed, %d recipient(s), %d signer(s)", len(meta.Recipients), len(signers.Active))
 	chain, err := vault.LoadChain(reader, meta.VaultID, r.Cfg.RepoID, r.identity, signers)
 	if err != nil {
 		return err
@@ -103,6 +103,10 @@ func (a *App) Verify(o VerifyOptions) error {
 		return errors.New("no generations for this repo yet")
 	}
 	for _, g := range chain.Gens {
+		if g.Opaque() {
+			a.logf("generation %06d: opaque (predates this key)  signed, chained", g.Num)
+			continue
+		}
 		var size int64
 		for _, f := range g.Manifest.Files {
 			size += f.Size

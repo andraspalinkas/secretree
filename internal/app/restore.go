@@ -114,7 +114,7 @@ func (a *App) Restore(o RestoreOptions) error {
 			var lines []string
 			for _, id := range ids {
 				label := "?"
-				if c, err := vault.LoadChain(reader, meta.VaultID, id, identity, signers); err == nil && c.Last() != nil {
+				if c, err := vault.LoadChain(reader, meta.VaultID, id, identity, signers); err == nil && c.Last() != nil && !c.Last().Opaque() {
 					label = c.Last().Manifest.Source.Label
 				}
 				lines = append(lines, fmt.Sprintf("  %s  %s", id, label))

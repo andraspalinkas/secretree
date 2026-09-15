@@ -93,10 +93,45 @@ func (r *Reader) Generations(repoID string) ([]int, error) {
 	return gens, nil
 }
 
-// LoadMeta reads and verifies vault.json. trusted must be one of the listed
+// SignerSet is the roster: active signers plus revoked ones with their
+// cut-off points.
+type SignerSet struct {
+	Active  []ssh.PublicKey
+	Revoked []revoked
+}
+
+type revoked struct {
+	Key            ssh.PublicKey
+	LastGeneration int
+	LastLedger     int
+}
+
+// ForGeneration returns the keys allowed to have signed generation n.
+func (s *SignerSet) ForGeneration(n int) []ssh.PublicKey {
+	out := append([]ssh.PublicKey{}, s.Active...)
+	for _, r := range s.Revoked {
+		if n <= r.LastGeneration {
+			out = append(out, r.Key)
+		}
+	}
+	return out
+}
+
+// ForLedger returns the keys allowed to have signed ledger entry n.
+func (s *SignerSet) ForLedger(n int) []ssh.PublicKey {
+	out := append([]ssh.PublicKey{}, s.Active...)
+	for _, r := range s.Revoked {
+		if n <= r.LastLedger {
+			out = append(out, r.Key)
+		}
+	}
+	return out
+}
+
+// LoadMeta reads and verifies vault.json. trusted must be one of the active
 // signers: it is the fingerprint the recovery kit vouches for, and it is what
 // turns a self-signed roster into something worth believing.
-func LoadMeta(r *Reader, trusted ssh.PublicKey) (*Meta, []ssh.PublicKey, error) {
+func LoadMeta(r *Reader, trusted ssh.PublicKey) (*Meta, *SignerSet, error) {
 	data, err := r.ReadFile(MetaFile)
 	if err != nil {
 		return nil, nil, err
@@ -128,15 +163,30 @@ func LoadMeta(r *Reader, trusted ssh.PublicKey) (*Meta, []ssh.PublicKey, error) 
 	if _, err := crypt.Verify(data, sig, signers); err != nil {
 		return nil, nil, fmt.Errorf("vault.json: %w", err)
 	}
-	return &m, signers, nil
+	set := &SignerSet{Active: signers}
+	for _, rv := range m.RevokedSigners {
+		pubs, err := keys.ParseAllowedSigners([]string{rv.Line})
+		if err != nil {
+			return nil, nil, fmt.Errorf("vault.json: revoked signer: %w", err)
+		}
+		set.Revoked = append(set.Revoked, revoked{Key: pubs[0], LastGeneration: rv.LastGeneration, LastLedger: rv.LastLedger})
+	}
+	return &m, set, nil
 }
 
-// Generation is one verified, decrypted manifest.
+// Generation is one verified manifest. Manifest is nil for an "opaque"
+// generation: its signature and place in the hash chain are verified, but
+// it was encrypted to recipients that do not include this key (it predates
+// this member). Such generations cannot be restored by this key, and the
+// chain guarantees nobody replaced them.
 type Generation struct {
 	Num                int
 	Manifest           *Manifest
 	ManifestCipherHash string
 }
+
+// Opaque reports whether the generation is unreadable by this key.
+func (g *Generation) Opaque() bool { return g.Manifest == nil }
 
 // Chain is the verified sequence of generations of one repo.
 type Chain struct {
@@ -150,6 +200,17 @@ func (c *Chain) Last() *Generation {
 		return nil
 	}
 	return &c.Gens[len(c.Gens)-1]
+}
+
+// Readable counts generations this key can decrypt.
+func (c *Chain) Readable() int {
+	n := 0
+	for i := range c.Gens {
+		if !c.Gens[i].Opaque() {
+			n++
+		}
+	}
+	return n
 }
 
 // Get returns generation n or nil.
@@ -166,6 +227,9 @@ func (c *Chain) Get(n int) *Generation {
 func (c *Chain) Bytes() int64 {
 	var n int64
 	for _, g := range c.Gens {
+		if g.Opaque() {
+			continue
+		}
 		for _, f := range g.Manifest.Files {
 			n += f.Size
 		}
@@ -176,7 +240,7 @@ func (c *Chain) Bytes() int64 {
 // LoadChain reads every generation of a repo, verifying signature, hash
 // chain and manifest contents. Any gap or mismatch is an error: the chain is
 // either whole or it is not.
-func LoadChain(r *Reader, vaultID, repoID string, identity age.Identity, signers []ssh.PublicKey) (*Chain, error) {
+func LoadChain(r *Reader, vaultID, repoID string, identity age.Identity, signers *SignerSet) (*Chain, error) {
 	nums, err := r.Generations(repoID)
 	if err != nil {
 		return nil, err
@@ -195,11 +259,19 @@ func LoadChain(r *Reader, vaultID, repoID string, identity age.Identity, signers
 		if err != nil {
 			return nil, err
 		}
-		if _, err := crypt.Verify(cipher, sig, signers); err != nil {
+		if _, err := crypt.Verify(cipher, sig, signers.ForGeneration(n)); err != nil {
 			return nil, fmt.Errorf("generation %06d: %w", n, err)
 		}
+		h := crypt.SHA256Bytes(cipher)
 		plain, err := crypt.DecryptBytes(cipher, identity)
 		if err != nil {
+			var noMatch *age.NoIdentityMatchError
+			if errors.As(err, &noMatch) {
+				// encrypted before this key was a recipient: opaque but verified
+				chain.Gens = append(chain.Gens, Generation{Num: n, ManifestCipherHash: h})
+				prevHash = &h
+				continue
+			}
 			return nil, fmt.Errorf("generation %06d manifest: %w", n, err)
 		}
 		var m Manifest
@@ -209,7 +281,6 @@ func LoadChain(r *Reader, vaultID, repoID string, identity age.Identity, signers
 		if err := checkManifest(&m, vaultID, repoID, n, prevHash); err != nil {
 			return nil, err
 		}
-		h := crypt.SHA256Bytes(cipher)
 		chain.Gens = append(chain.Gens, Generation{Num: n, Manifest: &m, ManifestCipherHash: h})
 		prevHash = &h
 	}
@@ -258,19 +329,25 @@ func (c *Chain) RestorePlan(target int) ([]Generation, error) {
 	if c.Get(target) == nil {
 		return nil, fmt.Errorf("generation %06d does not exist", target)
 	}
+	if c.Get(target).Opaque() {
+		return nil, fmt.Errorf("generation %06d predates this key's membership and cannot be read by it", target)
+	}
 	start := -1
 	for i := range c.Gens {
-		if c.Gens[i].Num <= target && c.Gens[i].Manifest.Kind == KindFull {
+		if c.Gens[i].Num <= target && !c.Gens[i].Opaque() && c.Gens[i].Manifest.Kind == KindFull {
 			start = i
 		}
 	}
 	if start < 0 {
-		return nil, errors.New("no full generation before target")
+		return nil, errors.New("no full generation readable by this key before the target")
 	}
 	var plan []Generation
 	for _, g := range c.Gens[start:] {
 		if g.Num > target {
 			break
+		}
+		if g.Opaque() {
+			return nil, fmt.Errorf("generation %06d is not readable by this key", g.Num)
 		}
 		plan = append(plan, g)
 	}

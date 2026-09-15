@@ -16,32 +16,59 @@ machine that holds the key. How that works, layer by layer, is in
 
 ## Status
 
-Layer 1 of five is built: the **vault** (Go, single static binary):
-`init`, `backup`, `verify`, `restore`, `status`, `schedule` against any git
-remote or a local directory, with a mandatory restore proof after every
-backup. The on-remote format is specified in
-[docs/vault-format.md](docs/vault-format.md) and frozen at v1, because the
-format outlives the tool: a vault must stay restorable with nothing but
-`git`, `age` and `ssh-keygen` ([docs/restore-by-hand.md](docs/restore-by-hand.md)).
-The same chain is the sync primitive for everything above it.
+Layers 1 and 2 of five are built (Go, one static binary), plus the first
+pieces of the developer-experience layer:
 
-Next: the git remote helper (`git push` straight into the vault, multiple
-writers, team keys), then PRs and reviews as encrypted git data with a local
-UI, then a runner and deploy agent. Roadmap in [docs/vision.md](docs/vision.md).
+- **Vault**: `init`, `backup`, `verify`, `restore`, `status`, `schedule`.
+  Frozen v1 format ([docs/vault-format.md](docs/vault-format.md)), mandatory
+  restore proof, hand-restorable with `git` + `age` + `ssh-keygen`
+  ([docs/restore-by-hand.md](docs/restore-by-hand.md)).
+- **Sync**: `git clone secretgit::<vault-url>`, `git push`, `git pull` through
+  a remote helper. Several writers; conflicts are ordinary git conflicts.
+- **Team**: `join` on a new device, `member add|remove|list`, per-device keys,
+  revocation that keeps the past verifiable and closes the future.
+- **Share**: `share <path>` or `share --diff a..b` produces a self-contained
+  encrypted HTML page that decrypts in the browser with a key from the link
+  fragment. Every share lands in the signed **disclosure ledger** (`ledger`).
+- **Local UI**: `ui` serves a code browser (tree, blob with line anchors,
+  blame, history, commit diffs, search) over the vault mirror at
+  `http://127.0.0.1:7391`; `link <path>:<line>` prints a permalink.
+
+Not yet: pull requests and reviews as encrypted git data, the runner and
+deploy agents, IDE extension, S3/rclone targets, Linux/Windows key stores
+(Linux uses a 0600 file under `~/.config/secretgit`). Roadmap in
+[docs/vision.md](docs/vision.md).
 
 ## Quick start
 
 ```bash
 export PATH="$HOME/sdk/go/bin:$PATH"          # wherever your Go lives
-go build -o bin/secretgit ./cmd/secretgit
+go build -o bin/secretgit ./cmd/secretgit && bin/secretgit install-helper
 
-cd ~/code/myrepo
-secretgit init --vault git@gitlab.com:you/myrepo-vault.git --kit-out ~/Desktop/kit.txt
-#   → keys in the OS key store, vault bootstrapped, recovery kit written. PRINT IT.
-secretgit backup            # full bundle → age → signed manifest → push → restore proof
+# a new project
+cd ~/code/myapp
+secretgit init --vault git@gitlab.com:you/myapp-vault.git --kit-out ~/Desktop/kit.txt
+git remote add origin secretgit::git@gitlab.com:you/myapp-vault.git
+git push -u origin main                       # encrypted generation + signed manifest
 secretgit status
-secretgit schedule --every 1h
+
+# a second device or a teammate
+secretgit join --vault git@gitlab.com:you/myapp-vault.git --name laptop --out join.txt
+#   ...send join.txt to a member, who runs:  secretgit member add --request join.txt
+secretgit clone git@gitlab.com:you/myapp-vault.git myapp
+
+# look at code the way you are used to
+secretgit ui --open                            # http://127.0.0.1:7391/blob/main/src/x.go#L10
+secretgit link src/x.go:10
+
+# show something to someone without a key
+secretgit share src/x.go --expires 3d --note "for the auditor"
+secretgit ledger                               # what left, when, who, why
 ```
+
+Backups of a repository that is not synced through the helper (or of
+out-of-repo state such as config files and databases) use `secretgit backup`;
+see the state archive example below.
 
 Out-of-repo state (config files, SQLite databases, ledgers) goes into an
 encrypted archive alongside the bundle; configure it in
@@ -51,14 +78,14 @@ encrypted archive alongside the bundle; configure it in
 "state": {
   "include": ["config/config.yaml", "data/ledger.jsonl"],
   "exclude": ["*.tmp"],
-  "pre_hook": "sqlite3 data/state.db \".backup '$SECRETGIT_STAGE/data/state.db'\""
+  "pre_hook": "sqlite3 data/state.db \\".backup '$SECRETGIT_STAGE/data/state.db'\\""
 }
 ```
 
 Disaster: on a fresh machine with only the recovery kit,
 
 ```bash
-secretgit restore --vault git@gitlab.com:you/myrepo-vault.git --to ~/code/myrepo --from-recovery-kit kit.txt
+secretgit restore --vault git@gitlab.com:you/myapp-vault.git --to ~/code/myapp --from-recovery-kit kit.txt
 ```
 
 ## Non-negotiables
@@ -80,12 +107,20 @@ secretgit restore --vault git@gitlab.com:you/myrepo-vault.git --to ~/code/myrepo
 ## Commands
 
 ```
-secretgit init      # keys → key store, printable recovery kit, vault repo bootstrap or join
-secretgit backup    # full or incremental bundle + optional out-of-repo state → encrypt → sign → push → restore proof
-secretgit verify    # fetch the chain back from the remote, check signatures, hashes, chain, and rebuild in a temp dir
-secretgit restore   # rebuild a repo (and its state) from the vault at any generation
-secretgit status    # last backup, last *proven* restore, chain size
-secretgit schedule  # launchd (macOS) or systemd user timer (Linux)
+secretgit init            keys → key store, recovery kit, vault bootstrap or join
+secretgit backup          snapshot every ref (+ state archive) → encrypt → sign → push → restore proof
+secretgit verify          fetch the chain back, check signatures, hashes, chain; rebuild in a temp dir
+secretgit restore         rebuild a repo (and its state) from the vault at any generation
+secretgit status          last backup, last *proven* restore, chain size
+secretgit schedule        launchd (macOS) or systemd user timer (Linux)
+secretgit clone           git clone through the helper (imports a recovery kit if given)
+secretgit install-helper  symlink git-remote-secretgit next to the binary
+secretgit join            new device: own keys + a join request for a member to approve
+secretgit member          list | add | remove | request
+secretgit share           encrypted, self-contained HTML snapshot of a file or diff
+secretgit ledger          every deliberate disclosure, signed and hash-chained
+secretgit ui              local code browser over the vault mirror
+secretgit link            permalink into the local UI
 ```
 
 ## Documents

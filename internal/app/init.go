@@ -284,7 +284,7 @@ func (a *App) autoInit(gitDir, helperURL string) error {
 	if id, err := kb.Identity(); err == nil {
 		if pub, err := kb.PublicKey(); err == nil {
 			if _, signers, err := vault.LoadMeta(reader, pub); err == nil {
-				if c, err := vault.LoadChain(reader, meta.VaultID, repoID, id, signers); err == nil && c.Last() != nil && c.Last().Manifest.Source.Label != "" {
+				if c, err := vault.LoadChain(reader, meta.VaultID, repoID, id, signers); err == nil && c.Last() != nil && !c.Last().Opaque() && c.Last().Manifest.Source.Label != "" {
 					label = c.Last().Manifest.Source.Label
 				}
 			}
