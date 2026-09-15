@@ -42,6 +42,8 @@ type Status struct {
 	LastErrorTime       *time.Time `json:"last_error_time,omitempty"`
 	ChainBytes          int64      `json:"chain_bytes"`
 	Generations         int        `json:"generations"`
+	KitConfirmed        *time.Time `json:"kit_confirmed,omitempty"` // the user said the recovery kit is printed
+	KitPending          bool       `json:"kit_pending,omitempty"`   // a new vault was created here; kit not yet confirmed
 }
 
 // Paths resolves the state directory for a git dir.

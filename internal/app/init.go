@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -26,6 +27,9 @@ type InitOptions struct {
 	KitOut   string // where to write the new recovery kit ("" = stdout)
 	RepoID   string // adopt an existing chain instead of starting a new one
 	Force    bool
+	NoRemote bool   // do not add the "origin" remote / install the helper
+	Push     bool   // push every branch and tag through the helper right away
+	Remote   string // remote name (default origin)
 }
 
 // Init prepares a repository for backups: keys in the key store, vault
@@ -43,6 +47,10 @@ func (a *App) Init(o InitOptions) error {
 		return fmt.Errorf("already initialised (%s); use --force to re-initialise", paths.Config)
 	}
 	store, err := keystore.Open()
+	if err != nil {
+		return err
+	}
+	created, err := a.createHostRepo(&o.VaultURL)
 	if err != nil {
 		return err
 	}
@@ -76,6 +84,10 @@ func (a *App) Init(o InitOptions) error {
 		}
 		if meta, err = a.bootstrapVault(reader, kb, branch, url); err != nil {
 			return err
+		}
+		if a.hostProtect != nil {
+			a.hostProtect()
+			a.hostProtect = nil
 		}
 	} else {
 		if kb, meta, err = a.joinVault(store, reader, o.KitIn); err != nil {
@@ -112,6 +124,9 @@ func (a *App) Init(o InitOptions) error {
 	a.logf("keys:    %s", store.Describe())
 	a.logf("config:  %s", paths.Config)
 
+	if created != "" {
+		a.logf("host:    created %s (private, main protected)", created)
+	}
 	if newVault {
 		kit, err := kb.RecoveryKit(url)
 		if err != nil {
@@ -126,9 +141,142 @@ func (a *App) Init(o InitOptions) error {
 			a.logf("\nRecovery kit (print it; without it a lost machine means lost backups):\n")
 			fmt.Fprint(a.Out, kit)
 		}
+		st, _ := config.LoadStatus(paths)
+		st.KitPending = true
+		_ = config.SaveStatus(paths, st)
+		a.logf("\nWhen it is on paper, run: secretgit kit --confirm   (status warns until then)")
+		if o.KitOut != "" {
+			a.logf("To print it now:        secretgit kit --print %s", o.KitOut)
+		}
 	}
-	a.logf("\nNext: secretgit backup")
+	if !o.NoRemote {
+		remote := o.Remote
+		if remote == "" {
+			remote = "origin"
+		}
+		if err := a.wireRemote(work, remote, url); err != nil {
+			a.logf("\nnote: %v", err)
+		}
+		if o.Push {
+			a.logf("\npushing every branch and tag through the helper…")
+			if err := a.pushAll(work, remote); err != nil {
+				return err
+			}
+		} else {
+			a.logf("\nNext: git push -u %s --all && git push %s --tags   (or: secretgit backup)", remote, remote)
+		}
+	} else {
+		a.logf("\nNext: secretgit backup")
+	}
 	return nil
+}
+
+// wireRemote installs the helper and adds the secretgit:: remote when the
+// repository has no remote of that name yet.
+func (a *App) wireRemote(work, remote, url string) error {
+	pathEnv, err := ensureHelperInPath()
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(os.Getenv("PATH"), filepath.Dir(exePath())) {
+		a.logf("helper:  git-remote-secretgit installed in %s; add that directory to your PATH (secretgit install-helper --dir /usr/local/bin puts it somewhere already on it)", filepath.Dir(exePath()))
+	} else {
+		a.logf("helper:  git-remote-secretgit ready")
+	}
+	_ = pathEnv
+	if cur, err := gitx.Run(work, "remote", "get-url", remote); err == nil {
+		cur = strings.TrimSpace(cur)
+		if cur == "secretgit::"+url {
+			a.logf("remote:  %s already points at the vault", remote)
+			return nil
+		}
+		return fmt.Errorf("remote %q already exists (%s); add the vault yourself: git remote add vault secretgit::%s", remote, cur, url)
+	}
+	if _, err := gitx.Run(work, "remote", "add", remote, "secretgit::"+url); err != nil {
+		return err
+	}
+	a.logf("remote:  %s = secretgit::%s", remote, url)
+	return nil
+}
+
+func exePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if r, err := filepath.EvalSymlinks(exe); err == nil {
+		return r
+	}
+	return exe
+}
+
+// pushAll pushes branches and tags through the helper with the helper
+// reachable even when the binary's directory is not on PATH.
+func (a *App) pushAll(work, remote string) error {
+	pathEnv, err := ensureHelperInPath()
+	if err != nil {
+		return err
+	}
+	for _, args := range [][]string{{"push", "-u", remote, "--all"}, {"push", remote, "--tags"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = work
+		cmd.Env = append(gitx.Env(), "PATH="+pathEnv)
+		cmd.Stdout, cmd.Stderr = a.Out, a.Err
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+		}
+	}
+	return nil
+}
+
+// createHostRepo turns "github:owner/name" or "gitlab:owner/name" into a
+// freshly created private repository (via the gh / glab CLI) and rewrites
+// the URL to its SSH form. Plain URLs and paths pass through untouched.
+func (a *App) createHostRepo(url *string) (string, error) {
+	var kind, slug string
+	switch {
+	case strings.HasPrefix(*url, "github:"):
+		kind, slug = "github", strings.TrimPrefix(*url, "github:")
+	case strings.HasPrefix(*url, "gitlab:"):
+		kind, slug = "gitlab", strings.TrimPrefix(*url, "gitlab:")
+	default:
+		return "", nil
+	}
+	if !strings.Contains(slug, "/") {
+		return "", fmt.Errorf("%s: expected owner/name", *url)
+	}
+	switch kind {
+	case "github":
+		if _, err := exec.LookPath("gh"); err != nil {
+			return "", errors.New("github: the gh CLI is not installed (https://cli.github.com); or create the repository yourself and pass its URL")
+		}
+		out, err := exec.Command("gh", "repo", "create", slug, "--private", "--description", "secretgit vault (ciphertext only)").CombinedOutput()
+		if err != nil && !strings.Contains(string(out), "already exists") {
+			return "", fmt.Errorf("gh repo create: %s", strings.TrimSpace(string(out)))
+		}
+		*url = "git@github.com:" + slug + ".git"
+		a.hostProtect = func() {
+			// force-push and deletion of main are refused by the host too
+			body := `{"required_status_checks":null,"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}`
+			cmd := exec.Command("gh", "api", "-X", "PUT", "repos/"+slug+"/branches/main/protection", "--input", "-")
+			cmd.Stdin = strings.NewReader(body)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				a.logf("note: could not protect main on GitHub (%s); do it in the repository settings", strings.TrimSpace(string(out)))
+			}
+		}
+		return "github.com/" + slug, nil
+	default:
+		if _, err := exec.LookPath("glab"); err != nil {
+			return "", errors.New("gitlab: the glab CLI is not installed (https://gitlab.com/gitlab-org/cli); or create the project yourself and pass its URL")
+		}
+		out, err := exec.Command("glab", "repo", "create", slug, "--private", "--description", "secretgit vault (ciphertext only)").CombinedOutput()
+		if err != nil && !strings.Contains(string(out), "already") {
+			return "", fmt.Errorf("glab repo create: %s", strings.TrimSpace(string(out)))
+		}
+		*url = "git@gitlab.com:" + slug + ".git"
+		// GitLab protects the default branch (no force-push) out of the box
+		return "gitlab.com/" + slug, nil
+	}
 }
 
 // bootstrapVault writes README, vault.json and its signature as the first

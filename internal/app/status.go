@@ -2,6 +2,9 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"secretgit/internal/config"
@@ -46,11 +49,16 @@ func (a *App) Status(dir string) error {
 	if st.LastError != "" {
 		a.logf("LAST ERROR:      %s (%s)", st.LastError, ago(st.LastErrorTime, 0))
 	}
+	if st.KitPending && st.KitConfirmed == nil {
+		a.logf("\nWARNING: the recovery kit of this vault has not been confirmed as printed. Without it a lost machine means lost backups. secretgit kit --confirm")
+	}
 	switch {
 	case st.LastGeneration == 0:
 		a.logf("\nno backup yet: run secretgit backup")
-	case st.LastProofGeneration < st.LastGeneration:
+	case st.LastProofGeneration < st.LastGeneration && secretgitRemote(work) == "":
 		a.logf("\nWARNING: generation %06d has NOT been proven restorable; run secretgit verify", st.LastGeneration)
+	case st.LastProofGeneration < st.LastGeneration:
+		a.logf("\nnote: pushes are verified on every fetch; for a full rebuild proof of generation %06d run secretgit verify", st.LastGeneration)
 	}
 	return nil
 }
@@ -65,4 +73,46 @@ func ago(t *time.Time, gen int) string {
 		s = fmt.Sprintf("generation %06d, %s", gen, s)
 	}
 	return s
+}
+
+// Kit manages the recovery kit: print it, or confirm it is on paper.
+func (a *App) Kit(dir string, printPath string, confirm bool) error {
+	_, gitDir, err := locateRepo(dir)
+	if err != nil {
+		return err
+	}
+	paths := config.NewPaths(gitDir)
+	if printPath != "" {
+		if _, err := os.Stat(printPath); err != nil {
+			return err
+		}
+		if lp, err := exec.LookPath("lp"); err == nil {
+			if out, err := exec.Command(lp, printPath).CombinedOutput(); err == nil {
+				a.logf("sent to the default printer: %s", strings.TrimSpace(string(out)))
+			} else {
+				a.logf("lp failed (%s); opening the file instead", strings.TrimSpace(string(out)))
+				openBrowser("file://" + printPath)
+			}
+		} else {
+			openBrowser("file://" + printPath)
+		}
+		a.logf("after printing: secretgit kit --confirm, then delete %s", printPath)
+	}
+	if confirm {
+		st, err := config.LoadStatus(paths)
+		if err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		st.KitConfirmed = &now
+		st.KitPending = false
+		if err := config.SaveStatus(paths, st); err != nil {
+			return err
+		}
+		a.logf("recovery kit confirmed as printed on %s", now.Format("2006-01-02"))
+	}
+	if printPath == "" && !confirm {
+		a.logf("usage: secretgit kit --print <file> | --confirm")
+	}
+	return nil
 }

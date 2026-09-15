@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"filippo.io/age"
@@ -37,7 +38,8 @@ func (a *App) loadVault(r *repo) (*vaultState, error) {
 	if empty {
 		return nil, errors.New("vault is empty; run secretgit init first")
 	}
-	reader := &vault.Reader{Dir: r.Paths.Cache}
+	fp, _ := r.Keys.Fingerprint()
+	reader := &vault.Reader{Dir: r.Paths.Cache, CacheDir: filepath.Join(r.Paths.Root, "manifest-cache", strings.TrimPrefix(fp, "SHA256:"))}
 	pub, _ := r.Keys.PublicKey()
 	meta, signers, err := vault.LoadMeta(reader, pub)
 	if err != nil {

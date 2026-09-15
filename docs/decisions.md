@@ -204,3 +204,36 @@ The deploy agent runs on the target, exports a branch tip with
 `git archive` (no `.git` on the server), and records a signed deploy
 event. It refuses commits without the required green check. CI holds no
 production credentials; the target needs no inbound access.
+
+## 0025 — `init` does the whole first mile — accepted (2026-09-15)
+
+`init` creates the host repository when given `github:owner/name` or
+`gitlab:owner/name` (private, `main` protected via the `gh`/`glab` CLI),
+installs the helper next to the binary, adds the `origin` remote and, with
+`--push`, pushes every branch and tag. A vault that was created here is
+flagged until `kit --confirm` records that the recovery kit is on paper;
+`status` nags until then. Rationale: the first five minutes decide
+whether a safety tool gets used at all.
+
+## 0026 — Notifications carry counts and kinds, not content — accepted (2026-09-15)
+
+`watch` polls the vault (or is kicked by a host webhook on `--serve`) and
+emits lines like "PR #3: new comment ×2 by bob" to ntfy, the desktop or a
+command. Titles are included only with `--include-titles`, because they
+leave the key boundary. Own events are never announced.
+
+## 0027 — Verified manifests are cached by blob id — accepted (2026-09-15)
+
+Loading a chain used to cost two `git cat-file` calls and an age
+decryption per generation. Manifests that this key has already verified
+and decrypted are cached under `.git/secretgit/manifest-cache/<key fp>/`
+keyed by the vault blob id, so a reload is one `git ls-tree` plus the hash
+chain check. The cache is per key (a different key must not inherit
+another's decryptions) and is ignored when unreadable.
+
+## 0028 — Late members and history: no re-encryption needed — accepted (2026-09-15)
+
+Earlier notes suggested re-encrypting old generations for members added
+later. Unnecessary: the full generation written by `member add` carries
+the complete git history. Only earlier *backup snapshots* stay opaque to
+the newcomer, which is the intended property.

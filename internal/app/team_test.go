@@ -24,7 +24,6 @@ func TestJoinAndMembers(t *testing.T) {
 	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: filepath.Join(homeA, "kit.txt"), Label: "app"}); err != nil {
 		t.Fatalf("init: %v\n%s", err, out)
 	}
-	git(t, src, "remote", "add", "origin", "secretgit::"+vaultDir)
 	if o, err := gitOut(src, "push", "-u", "origin", "--all"); err != nil {
 		t.Fatalf("push: %v\n%s", err, o)
 	}

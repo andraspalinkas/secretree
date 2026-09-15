@@ -28,6 +28,8 @@ type App struct {
 	Out     io.Writer
 	Err     io.Writer
 	Verbose bool
+
+	hostProtect func() // set by createHostRepo, run once the vault branch exists
 }
 
 func (a *App) logf(format string, args ...any) {

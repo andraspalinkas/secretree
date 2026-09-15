@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,7 +22,78 @@ import (
 // Reader reads files out of a git clone of the vault at HEAD. The clone may
 // be a partial (--filter=blob:none --no-checkout) clone: blobs are fetched
 // on demand, which is what makes the restore proof cheap on big vaults.
-type Reader struct{ Dir string }
+//
+// CacheDir, when set, stores verified and decrypted manifests keyed by
+// their blob id, so loading a long chain costs one git call instead of two
+// per generation. Entries are written only after signature verification
+// and are private to this key (0600); a different key must use a
+// different cache directory.
+type Reader struct {
+	Dir      string
+	CacheDir string
+}
+
+// blobIDs maps vault-relative paths under dir to blob ids, in one git call.
+func (r *Reader) blobIDs(dir string) (map[string]string, error) {
+	if !r.Exists(dir) {
+		return nil, nil
+	}
+	out, err := gitx.Run(r.Dir, "ls-tree", "HEAD:"+dir)
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		// <mode> <type> <oid>\t<name>
+		meta, name, ok := strings.Cut(line, "\t")
+		if !ok {
+			continue
+		}
+		f := strings.Fields(meta)
+		if len(f) == 3 && f[1] == "blob" {
+			m[name] = f[2]
+		}
+	}
+	return m, nil
+}
+
+type cachedManifest struct {
+	CipherSHA256 string   `json:"cipher_sha256"`
+	Manifest     Manifest `json:"manifest"`
+	Opaque       bool     `json:"opaque"`
+}
+
+func (r *Reader) cacheGet(oid string) (*cachedManifest, bool) {
+	if r.CacheDir == "" {
+		return nil, false
+	}
+	data, err := os.ReadFile(filepath.Join(r.CacheDir, oid+".json"))
+	if err != nil {
+		return nil, false
+	}
+	var c cachedManifest
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, false
+	}
+	return &c, true
+}
+
+func (r *Reader) cachePut(oid string, c *cachedManifest) {
+	if r.CacheDir == "" {
+		return
+	}
+	if err := os.MkdirAll(r.CacheDir, 0o700); err != nil {
+		return
+	}
+	data, err := json.Marshal(c)
+	if err != nil {
+		return
+	}
+	tmp := filepath.Join(r.CacheDir, oid+".tmp")
+	if err := os.WriteFile(tmp, data, 0o600); err == nil {
+		_ = os.Rename(tmp, filepath.Join(r.CacheDir, oid+".json"))
+	}
+}
 
 // ReadFile returns a small file's bytes.
 func (r *Reader) ReadFile(rel string) ([]byte, error) {
@@ -259,11 +332,32 @@ func LoadChain(r *Reader, vaultID, repoID string, identity age.Identity, signers
 	if err != nil {
 		return nil, err
 	}
+	oids, err := r.blobIDs(RepoDir(repoID))
+	if err != nil {
+		return nil, err
+	}
 	chain := &Chain{RepoID: repoID}
 	var prevHash *string
 	for i, n := range nums {
 		if n != i+1 {
 			return nil, fmt.Errorf("chain %s: generation %06d missing (found %06d)", repoID, i+1, n)
+		}
+		name := GenName(n) + ".manifest.age"
+		oid := oids[name]
+		if c, ok := r.cacheGet(oid); ok && oid != "" {
+			// already verified and decrypted by this key; only the chain link is re-checked
+			if err := checkLink(n, prevHash, c.CipherSHA256, c.Opaque, &c.Manifest); err != nil {
+				return nil, err
+			}
+			h := c.CipherSHA256
+			g := Generation{Num: n, ManifestCipherHash: h}
+			if !c.Opaque {
+				m := c.Manifest
+				g.Manifest = &m
+			}
+			chain.Gens = append(chain.Gens, g)
+			prevHash = &h
+			continue
 		}
 		cipher, err := r.ReadFile(ManifestPath(repoID, n))
 		if err != nil {
@@ -282,7 +376,11 @@ func LoadChain(r *Reader, vaultID, repoID string, identity age.Identity, signers
 			var noMatch *age.NoIdentityMatchError
 			if errors.As(err, &noMatch) {
 				// encrypted before this key was a recipient: opaque but verified
+				if err := checkLink(n, prevHash, h, true, nil); err != nil {
+					return nil, err
+				}
 				chain.Gens = append(chain.Gens, Generation{Num: n, ManifestCipherHash: h})
+				r.cachePut(oid, &cachedManifest{CipherSHA256: h, Opaque: true})
 				prevHash = &h
 				continue
 			}
@@ -296,9 +394,24 @@ func LoadChain(r *Reader, vaultID, repoID string, identity age.Identity, signers
 			return nil, err
 		}
 		chain.Gens = append(chain.Gens, Generation{Num: n, Manifest: &m, ManifestCipherHash: h})
+		r.cachePut(oid, &cachedManifest{CipherSHA256: h, Manifest: m})
 		prevHash = &h
 	}
 	return chain, nil
+}
+
+// checkLink verifies the hash chain for a cached or opaque generation.
+func checkLink(n int, prevHash *string, _ string, opaque bool, m *Manifest) error {
+	if opaque || m == nil {
+		return nil // an opaque manifest's own link is checked by its successor
+	}
+	switch {
+	case prevHash == nil && m.PrevManifestSHA256 != nil:
+		return fmt.Errorf("generation %06d: first manifest must not link to a predecessor", n)
+	case prevHash != nil && (m.PrevManifestSHA256 == nil || *m.PrevManifestSHA256 != *prevHash):
+		return fmt.Errorf("generation %06d: hash chain broken (a generation was altered or replaced)", n)
+	}
+	return nil
 }
 
 func checkManifest(m *Manifest, vaultID, repoID string, n int, prevHash *string) error {

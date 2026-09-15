@@ -29,7 +29,6 @@ func TestPullRequestFlow(t *testing.T) {
 	}
 	git(t, src, "add", "-A")
 	git(t, src, "commit", "-qm", "policy and ci")
-	git(t, src, "remote", "add", "origin", "secretgit::"+vaultDir)
 	if o, err := gitOut(src, "push", "-u", "origin", "--all"); err != nil {
 		t.Fatalf("push: %v\n%s", err, o)
 	}

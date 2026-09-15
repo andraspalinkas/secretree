@@ -136,10 +136,10 @@ Where people *look* at it:
   which is where most people review anyway.
 - **CLI**: `secretgit pr open|list|show|approve|merge`, `secretgit review`.
 
-Notifications: the host sees that the vault repo received a push and can
-fire a webhook; a tiny relay (or the host's own notification) tells team
-members "something changed" with an opaque id. The client fetches and
-decrypts. Nothing readable transits the notifier. Optional e-mail/ntfy.
+Notifications: `secretgit watch` polls the vault, or is kicked by the
+host's push webhook (`--serve`), and tells you "PR #3: new comment by
+bob" through ntfy, the desktop or any command. Nothing readable transits
+the notifier unless you opt titles in.
 
 Merging: `secretgit pr merge` performs the merge locally (fast-forward,
 merge commit or squash, as configured), pushes it through the helper, and

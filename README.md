@@ -46,11 +46,11 @@ Website: [site/index.html](site/index.html).
 export PATH="$HOME/sdk/go/bin:$PATH"          # wherever your Go lives
 go build -o bin/secretgit ./cmd/secretgit && bin/secretgit install-helper
 
-# a new project
+# a new project: creates the private host repo (gh/glab), installs the helper,
+# adds the origin remote, pushes every branch and tag, writes the recovery kit
 cd ~/code/myapp
-secretgit init --vault git@gitlab.com:you/myapp-vault.git --kit-out ~/Desktop/kit.txt
-git remote add origin secretgit::git@gitlab.com:you/myapp-vault.git
-git push -u origin main                       # encrypted generation + signed manifest
+secretgit init --vault github:you/myapp-vault --kit-out ~/Desktop/kit.txt --push
+secretgit kit --print ~/Desktop/kit.txt       # then: secretgit kit --confirm
 secretgit status
 
 # a second device or a teammate
@@ -59,8 +59,9 @@ secretgit join --vault git@gitlab.com:you/myapp-vault.git --name laptop --out jo
 secretgit clone git@gitlab.com:you/myapp-vault.git myapp
 
 # look at code the way you are used to
-secretgit ui --open                            # http://127.0.0.1:7391/blob/main/src/x.go#L10
-secretgit link src/x.go:10
+secretgit ui --install                         # always-on at http://127.0.0.1:7391
+secretgit link src/x.go:10                     # → http://127.0.0.1:7391/blob/<sha>/src/x.go#L10
+secretgit watch --desktop --ntfy https://ntfy.sh/your-topic   # "PR #3: new comment by bob"
 
 # reviews, CI and deploys
 secretgit policy --approvals 1 --checks ci     # commit .secretgit/policy.json on main
@@ -116,7 +117,8 @@ secretgit restore --vault git@gitlab.com:you/myapp-vault.git --to ~/code/myapp -
 ## Commands
 
 ```
-secretgit init            keys → key store, recovery kit, vault bootstrap or join
+secretgit init            keys, recovery kit, vault bootstrap or join; creates github:/gitlab: repos, wires origin, --push
+secretgit kit             --print the recovery kit, --confirm it is on paper (status warns until then)
 secretgit backup          snapshot every ref (+ state archive) → encrypt → sign → push → restore proof
 secretgit verify          fetch the chain back, check signatures, hashes, chain; rebuild in a temp dir
 secretgit restore         rebuild a repo (and its state) from the vault at any generation
@@ -132,7 +134,8 @@ secretgit runner          CI agent: run .secretgit/ci (or make ci, or --cmd) per
 secretgit deploy-agent    pull-based CD: export a branch to a directory when its check is green
 secretgit share           encrypted, self-contained HTML snapshot of a file or diff
 secretgit ledger          every deliberate disclosure, signed and hash-chained
-secretgit ui              local code browser and pull requests over the vault mirror
+secretgit ui              local code browser and pull requests (inline diff comments); --install as a service
+secretgit watch           activity notifications: --ntfy, --desktop, --exec; --serve accepts host webhooks
 secretgit link            permalink into the local UI
 ```
 

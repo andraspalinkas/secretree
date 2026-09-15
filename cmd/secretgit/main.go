@@ -17,7 +17,9 @@ const usage = `secretgit — zero-knowledge git backup onto any dumb storage
 usage: secretgit [-C <repo dir>] [-v] <command> [options]
 
 commands:
-  init      --vault <url|dir> [--label <name>] [--kit-out <file>] [--from-recovery-kit <file>] [--repo-id <id>] [--force]
+  init      --vault <url|dir|github:owner/name|gitlab:owner/name> [--kit-out <file>] [--push] [--label <name>]
+            [--from-recovery-kit <file>] [--repo-id <id>] [--no-remote] [--force]
+  kit       --print <file> | --confirm       # the recovery kit is on paper (status warns until then)
   backup    [--full]
   verify    [--generation N] [--quick]
   restore   --vault <url|dir> --to <dir> [--repo-id <id>] [--generation N] [--from-recovery-kit <file>] [--no-state]
@@ -29,7 +31,8 @@ commands:
   member    list | add --request <file> | add --recipient age1... [--signer "ssh-ed25519 ..."] --name <n> | remove --name <n> | request
   share     <path> [--ref <ref>] | --diff <a..b> [--expires 7d] [--note <why>] [--out <file.html>]
   ledger                                # every deliberate disclosure, signed and chained
-  ui        [--listen 127.0.0.1:7391] [--open]   # local code browser + pull requests over the vault mirror
+  ui        [--listen 127.0.0.1:7391] [--open] | --install | --uninstall   # local code browser + pull requests
+  watch     --ntfy <url> | --desktop | --exec <cmd> [--serve :8787] [--include-titles]   # activity notifications
   pr        open --title <t> [--base main] [--head <branch>] | list [--all] | show <#n> | comment <#n> -m <text> [--path f --line n]
             approve <#n> [-m] | request-changes <#n> -m | merge <#n> [--method merge|squash|ff] | close <#n>
   policy    [--approvals 1] [--checks ci]        # writes .secretgit/policy.json (commit it on the base branch)
@@ -79,8 +82,29 @@ func main() {
 		fs.StringVar(&o.KitIn, "from-recovery-kit", "", "import keys from a recovery kit (joining an existing vault)")
 		fs.StringVar(&o.RepoID, "repo-id", "", "continue an existing chain in the vault")
 		fs.BoolVar(&o.Force, "force", false, "overwrite an existing configuration")
+		fs.BoolVar(&o.Push, "push", false, "push every branch and tag through the helper right away")
+		fs.BoolVar(&o.NoRemote, "no-remote", false, "do not add a git remote or install the helper (backup-only use)")
+		fs.StringVar(&o.Remote, "remote", "origin", "name of the git remote to add")
 		must(fs.Parse(rest))
 		err = a.Init(o)
+	case "kit":
+		fs := flag.NewFlagSet("kit", flag.ExitOnError)
+		pr := fs.String("print", "", "send this recovery kit file to the default printer (or open it)")
+		confirm := fs.Bool("confirm", false, "record that the kit is on paper")
+		must(fs.Parse(rest))
+		err = a.Kit(*dir, *pr, *confirm)
+	case "watch":
+		fs := flag.NewFlagSet("watch", flag.ExitOnError)
+		o := app.WatchOptions{Dir: *dir}
+		fs.DurationVar(&o.Interval, "interval", 2*time.Minute, "poll interval")
+		fs.StringVar(&o.Ntfy, "ntfy", "", "ntfy topic URL (e.g. https://ntfy.sh/team-x7q)")
+		fs.StringVar(&o.Exec, "exec", "", "run this command; the message is in $SECRETGIT_MESSAGE")
+		fs.BoolVar(&o.Desktop, "desktop", false, "desktop notification (macOS / Linux)")
+		fs.StringVar(&o.Serve, "serve", "", "also accept host webhooks here, e.g. :8787 (any POST triggers a check)")
+		fs.BoolVar(&o.IncludeTitles, "include-titles", false, "include PR titles in messages (they leave the key boundary)")
+		fs.BoolVar(&o.Once, "once", false, "learn the current state and exit")
+		must(fs.Parse(rest))
+		err = a.Watch(o)
 	case "backup":
 		fs := flag.NewFlagSet("backup", flag.ExitOnError)
 		o := app.BackupOptions{Dir: *dir}
@@ -201,8 +225,17 @@ func main() {
 		o := app.UIOptions{Dir: *dir}
 		fs.StringVar(&o.Listen, "listen", app.DefaultUIAddr, "address to listen on (keep it loopback unless on a private network)")
 		fs.BoolVar(&o.Open, "open", false, "open in the browser")
+		install := fs.Bool("install", false, "run the UI as a background service (launchd / systemd --user)")
+		uninstall := fs.Bool("uninstall", false, "remove the background service")
 		must(fs.Parse(rest))
-		err = a.UI(o)
+		switch {
+		case *install:
+			err = a.UIInstall(*dir, o.Listen, false)
+		case *uninstall:
+			err = a.UIInstall(*dir, o.Listen, true)
+		default:
+			err = a.UI(o)
+		}
 	case "link":
 		fs := flag.NewFlagSet("link", flag.ExitOnError)
 		ref := fs.String("ref", "", "ref (default: current commit, for a permanent link)")

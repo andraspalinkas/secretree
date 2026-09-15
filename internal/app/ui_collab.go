@@ -58,6 +58,7 @@ type prPage struct {
 	Body                                   string
 	HeadSHA, BaseSHA                       string
 	Diff                                   template.HTML
+	DiffRows                               []diffRow
 	Events                                 []eventRow
 	Policy                                 collab.Policy
 	MergeBlock                             string
@@ -123,7 +124,7 @@ func (s *uiServer) pull(w http.ResponseWriter, r *http.Request) {
 	if pr.State == collab.StateOpen {
 		p.MergeBlock = c.mergeCheck(pr, head, base)
 		if out, err := gitx.Run(c.r.Work, "diff", base+"..."+head); err == nil {
-			p.Diff = renderDiff(out)
+			p.DiffRows = parseDiff(out, inlineComments(pr, head))
 		}
 	} else if pr.MergeCommit != "" {
 		if out, err := gitx.Run(c.r.Work, "show", "--stat", "--format=merged as %h", pr.MergeCommit); err == nil {
@@ -209,7 +210,26 @@ form.inline{display:inline}button{padding:5px 12px;margin-top:6px}button.primary
 .err{background:#ffebe9;border:1px solid #cf222e;padding:8px;border-radius:6px}.block{background:#fff8c5;border:1px solid #d4a72c;padding:8px;border-radius:6px}
 details summary{cursor:pointer}pre.log{font:11px/1.4 ui-monospace,Menlo,monospace;background:#f6f8fa;padding:8px;overflow:auto;max-height:300px}
 .two{display:flex;gap:12px;flex-wrap:wrap}.two>div{flex:1;min-width:280px}
+.diff.rows div{display:flex;align-items:flex-start;padding:0}.diff.rows .ln{width:44px;flex:none;text-align:right;padding-right:8px;color:#999;user-select:none}.diff.rows .tx{padding-left:8px;white-space:pre;flex:1}
+.diff.rows .add{width:16px;flex:none;text-align:center;color:transparent;text-decoration:none;font-weight:700}.diff.rows div:hover .add{color:#0969da}
+.diff.rows .ic{display:block;white-space:normal;background:#fff8c5;border-top:1px solid #e0c800;border-bottom:1px solid #e0c800;padding:6px 10px 6px 68px;font:13px/1.45 -apple-system,system-ui,sans-serif}.ic .who{font-weight:600}.ic .when{color:#666;font-size:12px;margin-left:6px}
+.diff.rows form.ic{background:#f6f8fa}.diff.rows form.ic textarea{width:100%;box-sizing:border-box;font:13px/1.4 -apple-system,system-ui,sans-serif;min-height:60px}
 </style>
+<script>
+document.addEventListener("click", function (ev) {
+  var a = ev.target.closest && ev.target.closest("a.add"); if (!a) return;
+  ev.preventDefault();
+  var row = a.parentNode; var existing = row.nextElementSibling;
+  if (existing && existing.tagName === "FORM") { existing.remove(); return; }
+  var f = document.createElement("form"); f.method = "post"; f.className = "ic";
+  f.action = location.pathname.replace(/\/$/, "") + "/comment";
+  f.innerHTML = '<input type="hidden" name="csrf" value="' + document.querySelector('input[name=csrf]').value + '">' +
+    '<input type="hidden" name="path" value="' + a.dataset.path.replace(/"/g, "&quot;") + '"><input type="hidden" name="line" value="' + a.dataset.line + '">' +
+    '<div style="margin-bottom:4px;color:#666">' + a.dataset.path + ':' + a.dataset.line + '</div><textarea name="body" required placeholder="comment on this line"></textarea><div><button>Comment</button> <button type="button" class="cancel">Cancel</button></div>';
+  f.querySelector(".cancel").onclick = function () { f.remove(); };
+  row.insertAdjacentElement("afterend", f); f.querySelector("textarea").focus();
+});
+</script>
 <header><a href="/">{{.Repo}}</a><a href="/pulls" class="nav">pull requests</a><small>{{.Source}}</small></header>
 <main>
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
@@ -244,7 +264,9 @@ details summary{cursor:pointer}pre.log{font:11px/1.4 ui-monospace,Menlo,monospac
 <button class="primary" {{if .MergeBlock}}disabled{{end}}>Merge</button></form>
 <form method="post" action="/pull/{{.PR.ID}}/close" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="danger">Close</button></form></div>
 {{end}}
-<h4>Changes</h4><div class="diff">{{.Diff}}</div>
+<h4>Changes</h4>
+{{if .DiffRows}}<div class="diff rows">{{range $i,$r := .DiffRows}}<div class="{{$r.Class}}"{{if $r.NewLine}} id="{{$r.Path}}-L{{$r.NewLine}}"{{end}}>{{if $r.NewLine}}<a class="add" href="#" data-path="{{$r.Path}}" data-line="{{$r.NewLine}}" title="comment on {{$r.Path}}:{{$r.NewLine}}">+</a><span class="ln">{{$r.NewLine}}</span>{{else}}<span class="ln"></span>{{end}}<span class="tx">{{$r.Text}}</span></div>{{range $r.Comments}}<div class="ic"><span class="who">{{.Who}}</span><span class="when">{{.When}}</span><div>{{.Body}}</div></div>{{end}}{{end}}</div>
+{{else}}<div class="diff">{{.Diff}}</div>{{end}}
 <h4>Conversation</h4>
 {{range .Events}}{{if eq .Kind "comment"}}<div class="ev"><span class="who">{{.Who}}</span><span class="when">{{.When}}{{if .Path}} · {{.Path}}:{{.Line}} @{{.Commit}}{{end}}</span><div>{{.Body}}</div></div>
 {{else if eq .Kind "review"}}<div class="ev review {{.Verdict}}"><span class="who">{{.Who}}</span> <span class="pill {{if eq .Verdict "approve"}}success{{else if eq .Verdict "request_changes"}}failure{{else}}pending{{end}}">{{.Verdict}}</span><span class="when">{{.When}} @{{.Commit}}</span>{{if .Body}}<div>{{.Body}}</div>{{end}}</div>

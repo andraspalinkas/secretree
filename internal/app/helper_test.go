@@ -77,7 +77,6 @@ func TestRemoteHelperRoundTrip(t *testing.T) {
 	}
 
 	// push through the helper: first generation is written from the mirror
-	git(t, src, "remote", "add", "origin", "secretgit::"+vaultDir)
 	if o, err := gitOut(src, "push", "-u", "origin", "--all"); err != nil {
 		t.Fatalf("push --all: %v\n%s", err, o)
 	}
@@ -172,7 +171,6 @@ func TestVaultLevelConflict(t *testing.T) {
 	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: filepath.Join(home, "kit.txt")}); err != nil {
 		t.Fatalf("init: %v\n%s", err, out)
 	}
-	git(t, src, "remote", "add", "origin", "secretgit::"+vaultDir)
 	if o, err := gitOut(src, "push", "-u", "origin", "main"); err != nil {
 		t.Fatalf("push: %v\n%s", err, o)
 	}
