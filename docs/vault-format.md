@@ -110,7 +110,7 @@ namespace `secretgit-v1`).
   "created": "2026-09-15T18:40:07Z",
   "prev_manifest_sha256": "c0ffee…",
   "source": {
-    "label": "tradebot",
+    "label": "my-app",
     "head": "refs/heads/main"
   },
   "refs": {

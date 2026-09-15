@@ -69,7 +69,7 @@ is **not** mitigated in v1. Padding is a possible v2 option.
 - **Separate keys** for encryption and signing. Rotating one does not force
   rotating the other; recipients (many) and signers (few) have different
   lifecycles.
-- **No passphrases as the primary key.** The tradebot predecessor used a
-  single PBKDF2 passphrase; it worked, but one shared secret has no
+- **No passphrases as the primary key.** The author's earlier shell-script
+  predecessor used a single PBKDF2 passphrase; it worked, but one shared secret has no
   revocation, no rotation, and no per-device identity. Passphrases remain
   as an *optional* wrapper around the printed recovery kit.

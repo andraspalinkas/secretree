@@ -5,9 +5,9 @@ Format: short ADR entries, newest last. Status: **accepted** / **proposed** /
 
 ## 0001 — Name: secretgit — accepted (2026-09-15)
 
-Repository lives at `~/Workspaces/secretgit`. The predecessor is the
-tradebot repository's `scripts/backup_gitlab.sh`, which stays untouched;
-secretgit is an independent project.
+The predecessor was a ~100-line private shell script (git bundle, openssl
+AES-CBC with a Keychain passphrase, an append-only mirror repo on GitLab).
+secretgit is an independent, standalone open-source project.
 
 ## 0002 — License: MIT — accepted (2026-09-15)
 
@@ -104,3 +104,30 @@ a 0700 directory inside the repository's git dir, on the same disk as the
 source itself, so no new exposure is created. A RAM-backed location
 (tmpfs, macOS `hdiutil` ram disk) is a planned hardening for the runner and
 restore-on-foreign-machine cases, where the disk is not already trusted.
+
+## 0013 — Scope: a private-git product, not a backup tool — accepted (2026-09-15)
+
+Owner's direction: a standalone open-source product that keeps source code
+encrypted everywhere outside key-holding machines *without* degrading the
+developer experience, including pull requests, reviews and CI/CD. The vault
+format and backup command stay as layer 1; the same chain becomes the sync
+primitive for a git remote helper, and collaboration data rides on it.
+Architecture and roadmap: [vision.md](vision.md).
+
+## 0014 — Collaboration data lives in git, clients enforce policy — accepted (2026-09-15)
+
+PRs, reviews, approvals and check results are signed git objects under
+`refs/secretgit/collab/*`, encrypted and synced like source (the
+git-appraise / git-bug approach). No server ever holds plaintext, and
+policy (approvals, green CI before merge) is verifiable by every client
+because the inputs are signed. The user-facing surface is a local web UI,
+an IDE extension and the CLI. A self-hosted forge behind the key remains a
+documented alternative, not the product.
+
+## 0015 — CI runs where the key is; the host is a webhook — accepted (2026-09-15)
+
+A runner agent on hardware the team controls decrypts into RAM and executes
+the team's existing pipeline files (`act` for GitHub workflows, make/just).
+Logs and artifacts go back encrypted. Registering as a host's self-hosted
+runner is a supported hybrid with documented metadata leakage. Keys are
+never placed in a host's secrets store.

@@ -31,5 +31,5 @@ temporary `SECRETGIT_HOME`, so they never touch the macOS Keychain.
 
 - Never weaken a verification step to make a test pass; the product is the
   restore proof.
-- The tradebot repository (`~/Workspaces/trader-bot`) is the reference
-  predecessor; do not modify it from here.
+- This is a standalone open-source product. Keep it free of references to
+  the author's private projects.
