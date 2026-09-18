@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"filippo.io/age"
 	"golang.org/x/crypto/ssh"
@@ -126,12 +125,12 @@ func (r *repo) lock() (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := flock(f); err != nil {
 		f.Close()
 		return nil, errors.New("another secretgit run is in progress for this repository")
 	}
 	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = funlock(f)
 		f.Close()
 	}, nil
 }

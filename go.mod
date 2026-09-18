@@ -7,9 +7,7 @@ require (
 	github.com/hiddeco/sshsig v0.2.0
 	github.com/klauspost/compress v1.20.0
 	golang.org/x/crypto v0.57.0
+	golang.org/x/sys v0.48.0
 )
 
-require (
-	filippo.io/hpke v0.4.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-)
+require filippo.io/hpke v0.4.0 // indirect
