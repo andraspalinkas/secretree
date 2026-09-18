@@ -1,8 +1,8 @@
 // Package keystore stores key bundles in the OS key store.
 //
-// macOS: the login Keychain via the `security` CLI (service "secretgit").
-// Elsewhere, and whenever SECRETGIT_KEYSTORE=file: a 0600 JSON file under
-// $SECRETGIT_HOME (default ~/.config/secretgit). The file store is also what
+// macOS: the login Keychain via the `security` CLI (service "secretree").
+// Elsewhere, and whenever SECRETREE_KEYSTORE=file: a 0600 JSON file under
+// $SECRETREE_HOME (default ~/.config/secretree). The file store is also what
 // tests use so they never touch a real Keychain.
 package keystore
 
@@ -18,7 +18,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/keys"
+	"github.com/andraspalinkas/secretree/internal/keys"
 )
 
 // ErrNotFound is returned when no bundle exists for a vault id.
@@ -35,7 +35,7 @@ type Store interface {
 
 // Open picks the backend from the environment and platform.
 func Open() (Store, error) {
-	switch os.Getenv("SECRETGIT_KEYSTORE") {
+	switch os.Getenv("SECRETREE_KEYSTORE") {
 	case "file":
 		return newFileStore()
 	case "keychain":
@@ -46,20 +46,20 @@ func Open() (Store, error) {
 		}
 		return newFileStore()
 	default:
-		return nil, fmt.Errorf("SECRETGIT_KEYSTORE: unknown backend %q", os.Getenv("SECRETGIT_KEYSTORE"))
+		return nil, fmt.Errorf("SECRETREE_KEYSTORE: unknown backend %q", os.Getenv("SECRETREE_KEYSTORE"))
 	}
 }
 
-// Home returns the secretgit config directory ($SECRETGIT_HOME or ~/.config/secretgit).
+// Home returns the secretree config directory ($SECRETREE_HOME or ~/.config/secretree).
 func Home() (string, error) {
-	if h := os.Getenv("SECRETGIT_HOME"); h != "" {
+	if h := os.Getenv("SECRETREE_HOME"); h != "" {
 		return h, nil
 	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "secretgit"), nil
+	return filepath.Join(dir, "secretree"), nil
 }
 
 // ---- file store ----
@@ -117,7 +117,7 @@ func (f fileStore) Describe() string { return "file (" + f.dir + ")" }
 
 type keychainStore struct{}
 
-const service = "secretgit"
+const service = "secretree"
 
 func account(vaultID, role string) string { return vaultID + "/" + role }
 
@@ -152,7 +152,7 @@ func (keychainStore) Delete(vaultID string) error {
 	return nil
 }
 
-func (keychainStore) Describe() string { return "macOS Keychain (service secretgit)" }
+func (keychainStore) Describe() string { return "macOS Keychain (service secretree)" }
 
 func keychainGet(acct string) (string, error) {
 	cmd := exec.Command("security", "find-generic-password", "-s", service, "-a", acct, "-w")
@@ -172,7 +172,7 @@ func keychainPut(acct, secret string) error {
 	// same trade-off as the `security` CLI itself. A Security.framework
 	// binding can replace this later without changing the item layout.
 	cmd := exec.Command("security", "add-generic-password", "-U", "-s", service, "-a", acct,
-		"-l", "secretgit "+acct, "-j", "secretgit vault key; do not delete", "-w", secret)
+		"-l", "secretree "+acct, "-j", "secretree vault key; do not delete", "-w", secret)
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
 	if err := cmd.Run(); err != nil {

@@ -1,6 +1,6 @@
 # Product vision and architecture
 
-**secretgit: private git for people who do not trust their git host.**
+**secretree: private git for people who do not trust their git host.**
 Source code is plaintext only on machines that hold a key. Everything that
 leaves those machines is ciphertext: history, branches, commit messages,
 pull requests, review comments, CI logs, build artifacts. The host you
@@ -18,7 +18,7 @@ and how each layer works. Status: layer 1 is built; the rest is design.
 Git hosts are breached through stolen tokens, provider CVEs, malicious
 integrations and insiders. Every one of those exposes plaintext source.
 Teams who care either self-host a forge (and now run a server, patch it,
-back it up, expose it to the internet) or accept the risk. secretgit is the
+back it up, expose it to the internet) or accept the risk. secretree is the
 third option: keep the convenience of a hosted remote, remove its ability to
 read anything.
 
@@ -30,15 +30,15 @@ None of them answer "how do I do a code review".
 
 ## What "no DX loss" means
 
-| A developer does… | With secretgit |
+| A developer does… | With secretree |
 |---|---|
-| `git clone`, `git push`, `git pull`, branches, tags | Identical. A remote helper (`secretgit::<url>`) encrypts on push and decrypts on fetch. |
-| Opens a pull request, requests review | `secretgit pr open` or the local UI. PR metadata is a git object like everything else, encrypted. |
+| `git clone`, `git push`, `git pull`, branches, tags | Identical. A remote helper (`secretree::<url>`) encrypts on push and decrypts on fetch. |
+| Opens a pull request, requests review | `secretree pr open` or the local UI. PR metadata is a git object like everything else, encrypted. |
 | Reads a diff, leaves line comments, approves | In the local UI (a small web app on `localhost`, or an IDE extension). Comments sync through the same encrypted remote. |
 | Gets notified | Push notifications carry only "PR #12 changed" plus an opaque id; the body is fetched and decrypted locally. |
 | Sees CI status on a PR | A runner *you* control decrypts the source, runs the pipeline, writes an encrypted result back; the UI shows it. |
 | Deploys | A deploy agent on the target host pulls the encrypted artifact, verifies the signature, decrypts in memory. |
-| Searches code, blames a line, shares a permalink | Local UI and IDE. Permalinks are `secretgit://` links that resolve on any machine with the key. |
+| Searches code, blames a line, shares a permalink | Local UI and IDE. Permalinks are `secretree://` links that resolve on any machine with the key. |
 | Files an issue | Same mechanism as PRs (git-native, encrypted). Optional, later. |
 
 What is genuinely lost, stated plainly: the host's own web UI for code, the
@@ -82,10 +82,10 @@ scheduling. Nothing in the upper layers changes the format; they add
 
 ### Layer 2 — sync: the remote helper
 
-`git remote add origin secretgit::git@github.com:team/app-vault.git`.
+`git remote add origin secretree::git@github.com:team/app-vault.git`.
 
 The helper keeps a local plaintext **mirror** (a bare repo under
-`.git/secretgit/mirror`) that represents the vault's logical state. It
+`.git/secretree/mirror`) that represents the vault's logical state. It
 advertises git's `connect` capability and proxies git's native protocol to
 `git-upload-pack` / `git-receive-pack` running on the mirror:
 
@@ -120,28 +120,28 @@ The insight that makes this work: a pull request is data, not a service.
 Title, description, base and head refs, review comments anchored to a
 commit + path + line, approvals, status checks, labels, state transitions.
 All of it fits in git objects under a dedicated ref namespace
-(`refs/secretgit/collab/*`), synced through the same chain, encrypted with
+(`refs/secretree/collab/*`), synced through the same chain, encrypted with
 the same keys, signed by the author's device key so authorship is
 verifiable without a server. Prior art: git-appraise (Google) and git-bug
-store reviews and issues exactly this way; secretgit adopts the approach
+store reviews and issues exactly this way; secretree adopts the approach
 and keeps the data format documented so other clients can read it.
 
 Where people *look* at it:
 
-- **Local UI**: `secretgit ui` serves a small web app on `localhost` with
+- **Local UI**: `secretree ui` serves a small web app on `localhost` with
   the views developers expect: PR list, diff with line comments, review
   threads, approve/request changes, CI status, blame, search. It reads the
   mirror and writes collab objects; it never listens on a public interface.
 - **IDE extension** (VS Code first): the same views inside the editor,
   which is where most people review anyway.
-- **CLI**: `secretgit pr open|list|show|approve|merge`, `secretgit review`.
+- **CLI**: `secretree pr open|list|show|approve|merge`, `secretree review`.
 
-Notifications: `secretgit watch` polls the vault, or is kicked by the
+Notifications: `secretree watch` polls the vault, or is kicked by the
 host's push webhook (`--serve`), and tells you "PR #3: new comment by
 bob" through ntfy, the desktop or any command. Nothing readable transits
 the notifier unless you opt titles in.
 
-Merging: `secretgit pr merge` performs the merge locally (fast-forward,
+Merging: `secretree pr merge` performs the merge locally (fast-forward,
 merge commit or squash, as configured), pushes it through the helper, and
 records the state change in the collab data. Branch protection rules
 ("needs 1 approval and green CI") are enforced by the client and *verified*
@@ -150,7 +150,7 @@ objects, a merge that violates policy is detectable by everyone, not just
 preventable by a server.
 
 Alternative kept in the docs for teams that already run a server: a
-self-hosted forge (Forgejo) behind the key, with secretgit as the encrypted
+self-hosted forge (Forgejo) behind the key, with secretree as the encrypted
 off-site sync and backup of it. Zero-knowledge toward the cloud, ordinary
 forge DX, but you run a server again.
 
@@ -159,7 +159,7 @@ forge DX, but you run a server again.
 Rule one: the key never enters the host's "secrets" store. A secret that
 the host can hand to a hosted runner is a secret the host can read.
 
-- **Runner agent** (`secretgit runner`): a daemon on a machine you own (a
+- **Runner agent** (`secretree runner`): a daemon on a machine you own (a
   Mac mini, a home server, a VPS, a spare laptop). It watches the vault
   (webhook or polling), fetches new generations, decrypts the needed commit
   into a RAM-backed directory, and executes the pipeline. Pipelines are the
@@ -171,12 +171,12 @@ the host can hand to a hosted runner is a secret the host can read.
   can read and sign check results but not merge.
 - **Hybrid** for teams who want the host's status UI: register the runner
   as a GitHub/GitLab self-hosted runner. The host then sees the workflow
-  file and job names; the checkout step is replaced by `secretgit unlock`,
+  file and job names; the checkout step is replaced by `secretree unlock`,
   which refuses to run on a hosted runner. Log privacy levels: plain,
   redacted, encrypted-only.
 - **Artifacts**: signed with the vault's signing key (or cosign) and
   encrypted to the deploy target's key.
-- **Deploy agent** (`secretgit deploy-agent`): runs on the target host,
+- **Deploy agent** (`secretree deploy-agent`): runs on the target host,
   pulls the encrypted artifact or the source generation, verifies
   signature and policy ("only artifacts from a merged, approved, green
   commit"), decrypts in memory, applies. Pull-based, so the target needs no
@@ -208,7 +208,7 @@ Everything in `docs/threat-model.md` holds. With a team, add:
 
 1. **Vault** — done: format, backup, verify, restore proof, keys, schedule.
 2. **Sync** — done: remote helper, multi-writer CAS, per-device keys,
-   `join` / `member add|remove`, revocation, `secretgit clone`.
+   `join` / `member add|remove`, revocation, `secretree clone`.
    Also done from the mitigations: `share` pages with a disclosure ledger,
    and the read-only local UI with permalinks.
 3. **Collab** — done: PR/review events in git, CLI, local UI with PR
@@ -274,8 +274,8 @@ get the same convenience from a machine that already holds a key.
   Dependabot-equivalents, CodeQL, Semgrep, Trivy, SonarQube, coverage
   tools, LLM reviewers via API. They run as jobs on the runner; their
   output lands in the collab data as checks, comments or PRs (Renovate
-  opening a PR through the remote helper simply works). secretgit ships
-  **recipes**: `secretgit integrate renovate` adds the job and the policy
+  opening a PR through the remote helper simply works). secretree ships
+  **recipes**: `secretree integrate renovate` adds the job and the policy
   entry.
 - **Scoped disclosure instead of source access.** An external service that
   needs *something* gets a derived artifact, never the tree: coverage
@@ -294,7 +294,7 @@ get the same convenience from a machine that already holds a key.
 
 ### 4. "Anyone with the link can view"
 
-- **Share links with the key in the fragment.** `secretgit share <ref|path|pr> --expires 7d`
+- **Share links with the key in the fragment.** `secretree share <ref|path|pr> --expires 7d`
   encrypts a self-contained snapshot to a fresh one-off key, uploads the
   blob to the host (or any static storage), and produces
   `https://viewer.example/#<blob-id>.<key>`. The fragment never reaches a
@@ -303,7 +303,7 @@ get the same convenience from a machine that already holds a key.
   optionally password-wrapped, and logged as a disclosure. The viewer is a
   static page you can self-host and pin.
 - **Guest keys with scope and expiry.** A contractor gets a recipient key
-  valid for a branch or a path subset for a time window; secretgit issues a
+  valid for a branch or a path subset for a time window; secretree issues a
   dedicated snapshot chain for that scope rather than granting access to
   the main chain, so revocation is real.
 - **Public mirrors of public parts.** The runner publishes plaintext copies
@@ -313,7 +313,7 @@ get the same convenience from a machine that already holds a key.
 ### The common thread: a disclosure ledger
 
 Every one of these mitigations is a *deliberate* exposure: a share link, an
-integration export, a public path, an ephemeral cloud runner. secretgit
+integration export, a public path, an ephemeral cloud runner. secretree
 records each as a signed event in the collab data and shows the ledger in
 `status` and the UI. The product claim becomes precise: not "nothing ever
 leaves", but "nothing leaves without a policy, a signature and a log entry",

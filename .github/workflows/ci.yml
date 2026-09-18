@@ -1,4 +1,4 @@
-# secretgit's own source is public, so it can use hosted CI. Vaults created
+# secretree's own source is public, so it can use hosted CI. Vaults created
 # with it never should; see docs/vision.md, layer 4.
 name: ci
 on:

@@ -9,10 +9,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretree/internal/config"
 )
 
-// UIInstall keeps `secretgit ui` running in the background (launchd on
+// UIInstall keeps `secretree ui` running in the background (launchd on
 // macOS, a systemd user service on Linux) so permalinks always resolve.
 func (a *App) UIInstall(dir, listen string, remove bool) error {
 	work, gitDir, err := locateRepo(dir)
@@ -27,7 +27,7 @@ func (a *App) UIInstall(dir, listen string, remove bool) error {
 		listen = DefaultUIAddr
 	}
 	exe := exePath()
-	id := "secretgit-ui-" + cfg.RepoID
+	id := "secretree-ui-" + cfg.RepoID
 	home, _ := os.UserHomeDir()
 	switch runtime.GOOS {
 	case "darwin":
@@ -40,7 +40,7 @@ func (a *App) UIInstall(dir, listen string, remove bool) error {
 			a.logf("ui service removed (%s)", label)
 			return nil
 		}
-		logDir := filepath.Join(home, "Library", "Logs", "secretgit")
+		logDir := filepath.Join(home, "Library", "Logs", "secretree")
 		_ = os.MkdirAll(logDir, 0o755)
 		_ = os.MkdirAll(filepath.Dir(plist), 0o755)
 		content := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
@@ -75,7 +75,7 @@ func (a *App) UIInstall(dir, listen string, remove bool) error {
 			return nil
 		}
 		_ = os.MkdirAll(dir, 0o755)
-		content := fmt.Sprintf("[Unit]\nDescription=secretgit ui for %s\n\n[Service]\nExecStart=%s -C %s ui --listen %s\nRestart=always\n\n[Install]\nWantedBy=default.target\n", work, exe, work, listen)
+		content := fmt.Sprintf("[Unit]\nDescription=secretree ui for %s\n\n[Service]\nExecStart=%s -C %s ui --listen %s\nRestart=always\n\n[Install]\nWantedBy=default.target\n", work, exe, work, listen)
 		if err := os.WriteFile(unit, []byte(content), 0o644); err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-// Package gitx shells out to git. secretgit never parses pack data itself.
+// Package gitx shells out to git. secretree never parses pack data itself.
 package gitx
 
 import (

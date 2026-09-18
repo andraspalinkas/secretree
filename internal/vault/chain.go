@@ -14,9 +14,9 @@ import (
 	"filippo.io/age"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/andraspalinkas/secretgit/internal/crypt"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/keys"
+	"github.com/andraspalinkas/secretree/internal/crypt"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/keys"
 )
 
 // Reader reads files out of a git clone of the vault at HEAD. The clone may
@@ -231,7 +231,7 @@ func LoadMeta(r *Reader, trusted ssh.PublicKey) (*Meta, *SignerSet, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, nil, fmt.Errorf("vault.json: %w", err)
 	}
-	if !strings.HasPrefix(m.Format, "secretgit-vault/1") {
+	if !strings.HasPrefix(m.Format, "secretree-vault/1") {
 		return nil, nil, fmt.Errorf("vault.json: unsupported format %q", m.Format)
 	}
 	signers, err := keys.ParseAllowedSigners(m.AllowedSigners)
@@ -415,7 +415,7 @@ func checkLink(n int, prevHash *string, _ string, opaque bool, m *Manifest) erro
 }
 
 func checkManifest(m *Manifest, vaultID, repoID string, n int, prevHash *string) error {
-	if !strings.HasPrefix(m.Format, "secretgit-manifest/1") {
+	if !strings.HasPrefix(m.Format, "secretree-manifest/1") {
 		return fmt.Errorf("generation %06d: unsupported manifest format %q", n, m.Format)
 	}
 	if m.VaultID != vaultID || m.RepoID != repoID || m.Generation != n {

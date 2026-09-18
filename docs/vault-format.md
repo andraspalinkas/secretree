@@ -1,6 +1,6 @@
 # Vault format v1
 
-This is the contract between secretgit and the remote. It is designed so
+This is the contract between secretree and the remote. It is designed so
 that a vault can be verified and restored with `git`, `age`, `ssh-keygen`
 and `shasum` alone. See [restore-by-hand.md](restore-by-hand.md) for the
 procedure; this document explains the *why*.
@@ -61,14 +61,14 @@ Plaintext, UTF-8, JSON, signed by a listed signer. Example:
 
 ```json
 {
-  "format": "secretgit-vault/1",
+  "format": "secretree-vault/1",
   "vault_id": "3f9c2a1b7e5d4c60",
   "created": "2026-09-15T10:12:33Z",
   "recipients": [
     "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"
   ],
   "allowed_signers": [
-    "secretgit namespaces=\"secretgit-v1\" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... vault-3f9c2a1b7e5d4c60 device mac-mini"
+    "secretree namespaces=\"secretree-v1\" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... vault-3f9c2a1b7e5d4c60 device mac-mini"
   ]
 }
 ```
@@ -77,12 +77,12 @@ Plaintext, UTF-8, JSON, signed by a listed signer. Example:
   store account prefix and in signature identities; carries no meaning.
 - `recipients`: age public keys. Order is irrelevant.
 - `allowed_signers`: lines in the exact format `ssh-keygen -Y verify -f`
-  expects. The principal is always the literal `secretgit`. The namespace
-  restriction `namespaces="secretgit-v1"` prevents a signature made for any
+  expects. The principal is always the literal `secretree`. The namespace
+  restriction `namespaces="secretree-v1"` prevents a signature made for any
   other purpose with the same key from being accepted here.
 
 `vault.json.sig` is produced by
-`ssh-keygen -Y sign -f <signing key> -n secretgit-v1 vault.json`.
+`ssh-keygen -Y sign -f <signing key> -n secretree-v1 vault.json`.
 Any change to `vault.json` (adding a recipient or signer) is a commit that
 replaces both files, signed by a key that was *already* listed — the roster
 can only be extended by an existing member, and history of the roster is the
@@ -103,7 +103,7 @@ fingerprint, for `member list` and `member remove`. It is informational;
 
 ```json
 "revoked_signers": [
-  {"line": "secretgit namespaces=\"secretgit-v1\" ssh-ed25519 AAAA… laptop-b",
+  {"line": "secretree namespaces=\"secretree-v1\" ssh-ed25519 AAAA… laptop-b",
    "fingerprint": "SHA256:…", "revoked_at": "2026-09-15T12:00:00Z",
    "last_generation": 4, "last_ledger": 1}
 ]
@@ -124,11 +124,11 @@ writes such a full generation immediately.
 
 Plaintext JSON, encrypted with age to all recipients → `NNNNNN.manifest.age`,
 then signed → `NNNNNN.manifest.age.sig` (signature over the *ciphertext*,
-namespace `secretgit-v1`).
+namespace `secretree-v1`).
 
 ```json
 {
-  "format": "secretgit-manifest/1",
+  "format": "secretree-manifest/1",
   "vault_id": "3f9c2a1b7e5d4c60",
   "repo_id": "9a1e4d0c5b2f7e83",
   "generation": 2,
@@ -164,7 +164,7 @@ namespace `secretgit-v1`).
       "size": 90112
     }
   ],
-  "tool": "secretgit/0.1.0"
+  "tool": "secretree/0.1.0"
 }
 ```
 
@@ -214,7 +214,7 @@ Field semantics:
   - the base generation's prerequisites are no longer reachable in the source
     (e.g. after an aggressive `git gc` following a history rewrite).
 - Bundles are produced by the source's own `git` and consumed by the
-  restoring machine's `git`; secretgit never parses pack data.
+  restoring machine's `git`; secretree never parses pack data.
 
 ## 6. State archive
 
@@ -225,7 +225,7 @@ manifest's `files[].role` is `state` and `content_encoding` is `zstd` or
 (`content_encoding` is always `none` for role `bundle`). Paths inside are relative to the source repo root. What goes in is
 configured per repo (`state.include`, `state.exclude`, `state.pre_hook`).
 The pre-hook exists for things like SQLite `.backup` snapshots; it runs with
-a staging directory path in `$SECRETGIT_STAGE` and whatever it writes there
+a staging directory path in `$SECRETREE_STAGE` and whatever it writes there
 is archived in addition to `state.include`.
 
 ## 7. Encryption details
@@ -238,7 +238,7 @@ is archived in addition to `state.include`.
 
 ## 8. Signatures
 
-`ssh-keygen -Y sign -f <signing key> -n secretgit-v1 <file>` produces
+`ssh-keygen -Y sign -f <signing key> -n secretree-v1 <file>` produces
 `<file>.sig` in OpenSSH's `SSHSIG` armored format. Only manifests and
 `vault.json` are signed; bundle and state ciphertexts are authenticated
 through the hashes inside the signed manifest.
@@ -247,7 +247,7 @@ Verification of a generation, in order:
 
 1. `vault.json.sig` verifies against a signer whose fingerprint you trust.
 2. `NNNNNN.manifest.age.sig` verifies against `allowed_signers` from
-   `vault.json`, namespace `secretgit-v1`.
+   `vault.json`, namespace `secretree-v1`.
 3. `prev_manifest_sha256` equals the SHA-256 of `(NNNNNN-1).manifest.age`.
 4. Decrypt the manifest (AEAD failure = tampering or wrong key).
 5. Every `files[]` entry: ciphertext SHA-256 matches, decrypts, plaintext
@@ -296,21 +296,21 @@ host anywhere.
 ## 9.3 Collaboration ref
 
 Pull requests, reviews, checks and deployments are ordinary git objects on
-the ref `refs/secretgit/collab`, which the helper syncs like any branch, so
+the ref `refs/secretree/collab`, which the helper syncs like any branch, so
 they are encrypted inside bundles and never appear on the remote in the
 clear. Tree layout: `pr/<number>-<rand>/<unix>-<eventid>.json` plus a
-`.json.sig` OpenSSH signature (namespace `secretgit-v1`) by the acting
+`.json.sig` OpenSSH signature (namespace `secretree-v1`) by the acting
 device; repository-level events (checks, deploys) live under `repo/`.
 File names are unique, so concurrent writers merge as a tree union
 (`git merge-tree`). Readers verify every signature against the signer
 roster *as of the event's timestamp*, so events by since-revoked members
-remain valid. Policy is `.secretgit/policy.json` at the base branch
+remain valid. Policy is `.secretree/policy.json` at the base branch
 (`required_approvals`, `required_checks`); a merge that violates it is
 detectable by every client because approvals and checks are signed.
 
 ## 10. Local state (not on the remote)
 
-Kept in the source repo's `.git/secretgit/` (so it follows the repo and is
+Kept in the source repo's `.git/secretree/` (so it follows the repo and is
 never committed):
 
 - `config.json`: vault remote URL, `repo_id`, state include/exclude/pre_hook,
@@ -322,7 +322,7 @@ never committed):
   generation; the remote helper fetches from and pushes into it.
   `mirror-state.json` records which generation it reflects.
 
-Key material lives only in the OS key store under service `secretgit`,
+Key material lives only in the OS key store under service `secretree`,
 accounts `<vault_id>/age-identity` and `<vault_id>/signing-key`, and on the
 printed recovery kit.
 

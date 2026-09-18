@@ -15,7 +15,7 @@ import (
 	"github.com/hiddeco/sshsig"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/andraspalinkas/secretgit/internal/keys"
+	"github.com/andraspalinkas/secretree/internal/keys"
 )
 
 // Digest describes one encrypted file.
@@ -162,7 +162,7 @@ func SHA256Bytes(b []byte) string {
 	return hex.EncodeToString(s[:])
 }
 
-// Sign produces an armored SSHSIG signature over data in the secretgit namespace.
+// Sign produces an armored SSHSIG signature over data in the secretree namespace.
 func Sign(data []byte, signer ssh.Signer) ([]byte, error) {
 	sig, err := sshsig.Sign(bytes.NewReader(data), signer, sshsig.HashSHA256, keys.Namespace)
 	if err != nil {

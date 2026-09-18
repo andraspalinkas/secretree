@@ -1,4 +1,4 @@
-// Command secretgit is a zero-knowledge off-site git backup tool.
+// Command secretree is a zero-knowledge off-site git backup tool.
 package main
 
 import (
@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/app"
+	"github.com/andraspalinkas/secretree/internal/app"
 )
 
-const usage = `secretgit — zero-knowledge git backup onto any dumb storage
+const usage = `secretree — zero-knowledge git backup onto any dumb storage
 
-usage: secretgit [-C <repo dir>] [-v] <command> [options]
+usage: secretree [-C <repo dir>] [-v] <command> [options]
 
 commands:
   init      --vault <url|dir|github:owner/name|gitlab:owner/name> [--kit-out <file>] [--push] [--label <name>]
@@ -25,7 +25,7 @@ commands:
   restore   --vault <url|dir> --to <dir> [--repo-id <id>] [--generation N] [--from-recovery-kit <file>] [--no-state]
   status
   clone     <vault-url> [dir] [--repo-id <id>] [--from-recovery-kit <file>]
-  install-helper [--dir <bindir>]     # makes "git clone secretgit::<vault-url>" work
+  install-helper [--dir <bindir>]     # makes "git clone secretree::<vault-url>" work
   schedule  --every <duration> | --daily HH:MM | --remove | --show
   join      --vault <url|dir> [--name <device>] [--out <file>]   # new device: keys + join request
   member    list | add --request <file> [--role agent] | add --recipient age1... [--signer "..."] --name <n> | remove --name <n> | request
@@ -36,7 +36,7 @@ commands:
   pr        open --title <t> [--base main] [--head <branch>] | list [--all] | show <#n> | comment <#n> -m <text> [--path f --line n]
             approve <#n> [-m] | request-changes <#n> -m | review <#n> --verdict <v> [-m] | resolve <#n> <comment-id>
             merge <#n> [--method merge|squash|ff] | close <#n>
-  policy    [--approvals 1] [--checks ci]        # writes .secretgit/policy.json (commit it on the base branch)
+  policy    [--approvals 1] [--checks ci]        # writes .secretree/policy.json (commit it on the base branch)
   runner    [--name ci] [--cmd <sh>] [--branches main] [--interval 60s] [--once]   # CI agent on a key-holding machine
   deploy-agent --to <dir> [--branch main] [--cmd <sh>] [--require-check ci] [--once]  # pull-based CD on the target host
   link      <path>[:<line>] [--ref <ref>]        # permalink into the local UI
@@ -44,20 +44,20 @@ commands:
 
 The vault is a git repository (SSH/HTTPS URL or a local directory) that only
 ever sees ciphertext. With the helper installed, a vault is an ordinary git
-remote: git remote add origin secretgit::<vault-url>[#<repo-id>] Docs: docs/vault-format.md, docs/restore-by-hand.md.
+remote: git remote add origin secretree::<vault-url>[#<repo-id>] Docs: docs/vault-format.md, docs/restore-by-hand.md.
 `
 
 func main() {
-	// git invokes us as git-remote-secretgit <name> <url>
+	// git invokes us as git-remote-secretree <name> <url>
 	if filepath.Base(os.Args[0]) == app.HelperName && len(os.Args) == 3 {
 		a := &app.App{Out: os.Stderr, Err: os.Stderr}
 		if err := a.RemoteHelper(os.Args[1], os.Args[2], os.Stdin, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "secretgit: %s\n", strings.TrimSpace(err.Error()))
+			fmt.Fprintf(os.Stderr, "secretree: %s\n", strings.TrimSpace(err.Error()))
 			os.Exit(1)
 		}
 		return
 	}
-	global := flag.NewFlagSet("secretgit", flag.ContinueOnError)
+	global := flag.NewFlagSet("secretree", flag.ContinueOnError)
 	global.SetOutput(os.Stderr)
 	dir := global.String("C", "", "run as if started in this directory")
 	verbose := global.Bool("v", false, "verbose output")
@@ -99,7 +99,7 @@ func main() {
 		o := app.WatchOptions{Dir: *dir}
 		fs.DurationVar(&o.Interval, "interval", 2*time.Minute, "poll interval")
 		fs.StringVar(&o.Ntfy, "ntfy", "", "ntfy topic URL (e.g. https://ntfy.sh/team-x7q)")
-		fs.StringVar(&o.Exec, "exec", "", "run this command; the message is in $SECRETGIT_MESSAGE")
+		fs.StringVar(&o.Exec, "exec", "", "run this command; the message is in $SECRETREE_MESSAGE")
 		fs.BoolVar(&o.Desktop, "desktop", false, "desktop notification (macOS / Linux)")
 		fs.StringVar(&o.Serve, "serve", "", "also accept host webhooks here, e.g. :8787 (any POST triggers a check)")
 		fs.BoolVar(&o.IncludeTitles, "include-titles", false, "include PR titles in messages (they leave the key boundary)")
@@ -140,7 +140,7 @@ func main() {
 		fs.StringVar(&o.KitIn, "from-recovery-kit", "", "recovery kit file to import first")
 		pos := parseAll(fs, rest)
 		if len(pos) < 1 {
-			fmt.Fprintln(os.Stderr, "usage: secretgit clone <vault-url> [dir]")
+			fmt.Fprintln(os.Stderr, "usage: secretree clone <vault-url> [dir]")
 			os.Exit(2)
 		}
 		o.VaultURL = pos[0]
@@ -150,12 +150,12 @@ func main() {
 		err = a.Clone(o)
 	case "install-helper":
 		fs := flag.NewFlagSet("install-helper", flag.ExitOnError)
-		d := fs.String("dir", "", "directory for the git-remote-secretgit symlink (default: next to this binary)")
+		d := fs.String("dir", "", "directory for the git-remote-secretree symlink (default: next to this binary)")
 		must(fs.Parse(rest))
 		err = a.InstallHelperCmd(*d)
 	case "remote-helper":
 		if len(rest) != 2 {
-			fmt.Fprintln(os.Stderr, "usage: secretgit remote-helper <name> <url>   (normally invoked by git)")
+			fmt.Fprintln(os.Stderr, "usage: secretree remote-helper <name> <url>   (normally invoked by git)")
 			os.Exit(2)
 		}
 		a.Out = os.Stderr
@@ -182,7 +182,7 @@ func main() {
 		err = a.Join(o)
 	case "member":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "usage: secretgit member list|add|remove|request")
+			fmt.Fprintln(os.Stderr, "usage: secretree member list|add|remove|request")
 			os.Exit(2)
 		}
 		sub, subrest := rest[0], rest[1:]
@@ -204,7 +204,7 @@ func main() {
 		case "request":
 			err = a.MemberRequest(*dir)
 		default:
-			fmt.Fprintln(os.Stderr, "usage: secretgit member list|add|remove|request")
+			fmt.Fprintln(os.Stderr, "usage: secretree member list|add|remove|request")
 			os.Exit(2)
 		}
 	case "share":
@@ -253,13 +253,13 @@ func main() {
 		ref := fs.String("ref", "", "ref (default: current commit, for a permanent link)")
 		pos := parseAll(fs, rest)
 		if len(pos) != 1 {
-			fmt.Fprintln(os.Stderr, "usage: secretgit link <path>[:<line>] [--ref <ref>]")
+			fmt.Fprintln(os.Stderr, "usage: secretree link <path>[:<line>] [--ref <ref>]")
 			os.Exit(2)
 		}
 		err = a.Link(*dir, pos[0], *ref)
 	case "pr":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "usage: secretgit pr open|list|show|comment|review|approve|request-changes|resolve|merge|close")
+			fmt.Fprintln(os.Stderr, "usage: secretree pr open|list|show|comment|review|approve|request-changes|resolve|merge|close")
 			os.Exit(2)
 		}
 		sub, subrest := rest[0], rest[1:]
@@ -299,7 +299,7 @@ func main() {
 			err = a.PRReview(*dir, ref, *verdict, *msg)
 		case "resolve":
 			if len(pos) < 2 {
-				fmt.Fprintln(os.Stderr, "usage: secretgit pr resolve <#n> <comment-id>")
+				fmt.Fprintln(os.Stderr, "usage: secretree pr resolve <#n> <comment-id>")
 				os.Exit(2)
 			}
 			err = a.PRResolve(*dir, ref, pos[1])
@@ -308,7 +308,7 @@ func main() {
 		case "close":
 			err = a.PRClose(*dir, ref)
 		default:
-			fmt.Fprintln(os.Stderr, "usage: secretgit pr open|list|show|comment|review|approve|request-changes|resolve|merge|close")
+			fmt.Fprintln(os.Stderr, "usage: secretree pr open|list|show|comment|review|approve|request-changes|resolve|merge|close")
 			os.Exit(2)
 		}
 	case "policy":
@@ -327,7 +327,7 @@ func main() {
 		fs := flag.NewFlagSet("runner", flag.ExitOnError)
 		o := app.RunnerOptions{Dir: *dir}
 		fs.StringVar(&o.Name, "name", "ci", "check name")
-		fs.StringVar(&o.Cmd, "cmd", "", "pipeline command (default: .secretgit/ci, then make ci)")
+		fs.StringVar(&o.Cmd, "cmd", "", "pipeline command (default: .secretree/ci, then make ci)")
 		branches := fs.String("branches", "main", "comma-separated branches to always check")
 		fs.DurationVar(&o.Interval, "interval", 60*time.Second, "poll interval")
 		fs.DurationVar(&o.Timeout, "timeout", 30*time.Minute, "per-job timeout")
@@ -347,7 +347,7 @@ func main() {
 		must(fs.Parse(rest))
 		err = a.DeployAgent(o)
 	case "version":
-		fmt.Println("secretgit", app.Version)
+		fmt.Println("secretree", app.Version)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -355,7 +355,7 @@ func main() {
 		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "secretgit %s: %s\n", cmd, strings.TrimSpace(err.Error()))
+		fmt.Fprintf(os.Stderr, "secretree %s: %s\n", cmd, strings.TrimSpace(err.Error()))
 		os.Exit(1)
 	}
 }
@@ -367,7 +367,7 @@ func must(err error) {
 }
 
 // parseAll lets flags and positional arguments be interleaved, the way
-// git's own commands behave: `secretgit share src/x.go --out page.html`.
+// git's own commands behave: `secretree share src/x.go --out page.html`.
 func parseAll(fs *flag.FlagSet, args []string) []string {
 	var positional []string
 	for {

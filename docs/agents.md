@@ -10,13 +10,13 @@ key, to write you need a signer.
 On the machine that will run it (usually the runner box):
 
 ```sh
-secretgit join --vault git@gitlab.com:team/app-vault.git --name review-bot --out review-bot.txt
+secretree join --vault git@gitlab.com:team/app-vault.git --name review-bot --out review-bot.txt
 ```
 
 A person approves it **as an agent**:
 
 ```sh
-secretgit member add --request review-bot.txt --role agent
+secretree member add --request review-bot.txt --role agent
 ```
 
 Agents may read, comment and review. Their approvals never count toward
@@ -30,23 +30,23 @@ request, and hands the job the PR context:
 
 | variable | meaning |
 |---|---|
-| `SECRETGIT_PR`, `SECRETGIT_PR_ID` | pull request number and id |
-| `SECRETGIT_COMMIT` | the head commit being processed |
-| `SECRETGIT_BASE`, `SECRETGIT_BASE_BRANCH`, `SECRETGIT_HEAD_BRANCH` | the base commit and branch names |
-| `SECRETGIT_REPO_DIR` | the runner's clone, for `secretgit -C` calls |
-| `SECRETGIT_BRANCH` | set instead of the PR variables for plain branch checks |
+| `SECRETREE_PR`, `SECRETREE_PR_ID` | pull request number and id |
+| `SECRETREE_COMMIT` | the head commit being processed |
+| `SECRETREE_BASE`, `SECRETREE_BASE_BRANCH`, `SECRETREE_HEAD_BRANCH` | the base commit and branch names |
+| `SECRETREE_REPO_DIR` | the runner's clone, for `secretree -C` calls |
+| `SECRETREE_BRANCH` | set instead of the PR variables for plain branch checks |
 
 So an agent is a runner with a name and a command:
 
 ```sh
-secretgit runner --name ai-review --branches "" --cmd agents/review.sh
+secretree runner --name ai-review --branches "" --cmd agents/review.sh
 ```
 
 `--branches ""` keeps the agent on pull requests only (by default a runner
 also checks `main`).
 
 `agents/review.sh` (in this repository) pipes the diff to a model, posts
-line comments with `secretgit pr comment --path --line`, records a verdict
+line comments with `secretree pr comment --path --line`, records a verdict
 with `pr review --verdict`, and, because the diff left the key boundary,
 writes a ledger entry first. Several agents are several runners with
 different names (`security`, `tests`, `docs`); each gets its own key.
@@ -56,9 +56,9 @@ different names (`security`, `tests`, `docs`); each gets its own key.
 This is the one place where something leaves the key boundary, and it is
 explicit. A local model (`MODEL_CMD="ollama run codellama"`) keeps the diff
 on the machine. A hosted model receives the diff; the ledger says so
-(`secretgit ledger`), naming the PR, the commit and the provider. The team
+(`secretree ledger`), naming the PR, the commit and the provider. The team
 decides which providers are acceptable and writes it down in
-`.secretgit/policy.json` next to the review rules.
+`.secretree/policy.json` next to the review rules.
 
 ## Reading agent output
 

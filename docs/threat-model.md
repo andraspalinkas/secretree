@@ -39,7 +39,7 @@ is **not** mitigated in v1. Padding is a possible v2 option.
 | Attacker with the workstation while it is unlocked | **Game over for confidentiality.** They can read the source directly and can pull keys from the key store as the user. This tool does not protect the developer machine; nothing running on it could. |
 | Attacker with the workstation while it is locked / disk image only | Keys in the OS key store are encrypted at rest; source on disk is protected only by the platform's disk encryption. Not this tool's job. |
 | Lost or destroyed workstation | Restorable from the vault with the printed recovery kit. Losing the kit **and** every paired device = permanent loss. That is the deal with zero knowledge. |
-| Malicious or buggy secretgit release | Mitigated by the format being restorable with stock tools and by the restore proof being a *real* fetch-decrypt-rebuild, not a self-report. Not mitigated: a malicious build could exfiltrate keys. Pin releases; build from source. |
+| Malicious or buggy secretree release | Mitigated by the format being restorable with stock tools and by the restore proof being a *real* fetch-decrypt-rebuild, not a self-report. Not mitigated: a malicious build could exfiltrate keys. Pin releases; build from source. |
 | Compromised CI runner (phases 3–4) | The runner holds the unlock key; if it is compromised the source is exposed. The runner is the trust root by design — that is why it must be *yours*. |
 
 ## Explicitly out of scope

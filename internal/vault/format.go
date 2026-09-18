@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	FormatVault    = "secretgit-vault/1"
-	FormatManifest = "secretgit-manifest/1"
+	FormatVault    = "secretree-vault/1"
+	FormatManifest = "secretree-manifest/1"
 
 	KindFull        = "full"
 	KindIncremental = "incremental"

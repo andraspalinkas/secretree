@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/collab"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/collab"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 func newToken() string {
@@ -121,7 +121,7 @@ func (s *uiServer) pulls(w http.ResponseWriter, r *http.Request) {
 		p.Rows = append(p.Rows, s.row(c, &c.prs[i]))
 	}
 	if len(c.prs) == 0 {
-		p.Body = "no pull requests yet: push a branch and open one here, or with secretgit pr open"
+		p.Body = "no pull requests yet: push a branch and open one here, or with secretree pr open"
 	}
 	s.renderPR(w, p)
 }
@@ -183,7 +183,7 @@ func (s *uiServer) pullNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := &prPage{Kind: "new", Title: "new pull request", Error: r.URL.Query().Get("error")}
-	remote := secretgitRemote(s.work)
+	remote := secretreeRemote(s.work)
 	pattern := "refs/heads/"
 	if remote != "" {
 		pattern = "refs/remotes/" + remote + "/"

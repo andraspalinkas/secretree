@@ -1,4 +1,4 @@
-// Package config holds per-repository local state under .git/secretgit/.
+// Package config holds per-repository local state under .git/secretree/.
 package config
 
 import (
@@ -11,9 +11,9 @@ import (
 )
 
 // Dir is the name of the state directory inside the git dir.
-const Dir = "secretgit"
+const Dir = "secretree"
 
-// Config is .git/secretgit/config.json.
+// Config is .git/secretree/config.json.
 type Config struct {
 	VaultURL    string  `json:"vault_url"`
 	VaultBranch string  `json:"vault_branch"`
@@ -29,10 +29,10 @@ type Config struct {
 type State struct {
 	Include []string `json:"include,omitempty"`  // paths relative to the work tree
 	Exclude []string `json:"exclude,omitempty"`  // glob patterns matched against relative paths
-	PreHook string   `json:"pre_hook,omitempty"` // shell command; $SECRETGIT_STAGE is a staging dir
+	PreHook string   `json:"pre_hook,omitempty"` // shell command; $SECRETREE_STAGE is a staging dir
 }
 
-// Status is .git/secretgit/status.json.
+// Status is .git/secretree/status.json.
 type Status struct {
 	LastGeneration      int        `json:"last_generation"`
 	LastBackup          *time.Time `json:"last_backup,omitempty"`
@@ -48,7 +48,7 @@ type Status struct {
 
 // Paths resolves the state directory for a git dir.
 type Paths struct {
-	Root   string // <gitdir>/secretgit
+	Root   string // <gitdir>/secretree
 	Config string
 	Status string
 	Cache  string // vault working clone
@@ -69,8 +69,8 @@ func NewPaths(gitDir string) Paths {
 	}
 }
 
-// ErrNotInitialised means `secretgit init` has not run here.
-var ErrNotInitialised = errors.New("this repository is not initialised for secretgit (run: secretgit init --vault <url>)")
+// ErrNotInitialised means `secretree init` has not run here.
+var ErrNotInitialised = errors.New("this repository is not initialised for secretree (run: secretree init --vault <url>)")
 
 // Load reads config.json.
 func Load(p Paths) (*Config, error) {

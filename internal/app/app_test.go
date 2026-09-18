@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/vault"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/vault"
 )
 
 // env isolates the key store and HOME so tests never touch a real Keychain.
@@ -17,8 +17,8 @@ func env(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("SECRETGIT_HOME", filepath.Join(home, "sg"))
-	t.Setenv("SECRETGIT_KEYSTORE", "file")
+	t.Setenv("SECRETREE_HOME", filepath.Join(home, "sg"))
+	t.Setenv("SECRETREE_KEYSTORE", "file")
 	t.Setenv("GIT_AUTHOR_NAME", "t")
 	t.Setenv("GIT_AUTHOR_EMAIL", "t@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "t")
@@ -220,10 +220,10 @@ func TestStateArchive(t *testing.T) {
 	write(t, src, "data/ledger.jsonl", "{\"x\":1}\n")
 	write(t, src, "data/cache.tmp", "junk")
 	write(t, src, "config.local", "secret=1\n")
-	cfgPath := filepath.Join(src, ".git", "secretgit", "config.json")
+	cfgPath := filepath.Join(src, ".git", "secretree", "config.json")
 	cfg, _ := os.ReadFile(cfgPath)
 	patched := strings.Replace(string(cfg), `"state": {}`,
-		`"state": {"include": ["data", "config.local"], "exclude": ["*.tmp"], "pre_hook": "mkdir -p \"$SECRETGIT_STAGE/data\" && echo snapshot > \"$SECRETGIT_STAGE/data/snap.txt\""}`, 1)
+		`"state": {"include": ["data", "config.local"], "exclude": ["*.tmp"], "pre_hook": "mkdir -p \"$SECRETREE_STAGE/data\" && echo snapshot > \"$SECRETREE_STAGE/data/snap.txt\""}`, 1)
 	if patched == string(cfg) {
 		t.Fatalf("config patch failed:\n%s", cfg)
 	}

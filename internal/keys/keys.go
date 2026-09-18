@@ -17,11 +17,11 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Namespace is the SSHSIG namespace for every secretgit v1 signature.
-const Namespace = "secretgit-v1"
+// Namespace is the SSHSIG namespace for every secretree v1 signature.
+const Namespace = "secretree-v1"
 
-// Principal is the allowed_signers principal used for every secretgit signer.
-const Principal = "secretgit"
+// Principal is the allowed_signers principal used for every secretree signer.
+const Principal = "secretree"
 
 // Bundle holds the secret material of one vault. It lives in the OS key store
 // and on the printed recovery kit, nowhere else.
@@ -50,7 +50,7 @@ func Generate(vaultID string) (*Bundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("generate signing key: %w", err)
 	}
-	block, err := ssh.MarshalPrivateKey(priv, "secretgit vault "+vaultID)
+	block, err := ssh.MarshalPrivateKey(priv, "secretree vault "+vaultID)
 	if err != nil {
 		return nil, fmt.Errorf("encode signing key: %w", err)
 	}
@@ -103,7 +103,7 @@ func (b *Bundle) Fingerprint() (string, error) {
 }
 
 // AllowedSignersLine renders this signing key in OpenSSH allowed_signers
-// syntax, restricted to the secretgit namespace.
+// syntax, restricted to the secretree namespace.
 func (b *Bundle) AllowedSignersLine(comment string) (string, error) {
 	pub, err := b.PublicKey()
 	if err != nil {
@@ -112,7 +112,7 @@ func (b *Bundle) AllowedSignersLine(comment string) (string, error) {
 	return AllowedSignersLine(pub, comment), nil
 }
 
-// AllowedSignersLine renders any public key as a secretgit allowed_signers line.
+// AllowedSignersLine renders any public key as a secretree allowed_signers line.
 func AllowedSignersLine(pub ssh.PublicKey, comment string) string {
 	auth := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(pub)))
 	line := fmt.Sprintf("%s namespaces=\"%s\" %s", Principal, Namespace, auth)
@@ -123,7 +123,7 @@ func AllowedSignersLine(pub ssh.PublicKey, comment string) string {
 }
 
 // ParseAllowedSigners parses lines in OpenSSH allowed_signers syntax and
-// returns the public keys that are valid for the secretgit namespace.
+// returns the public keys that are valid for the secretree namespace.
 func ParseAllowedSigners(lines []string) ([]ssh.PublicKey, error) {
 	var out []ssh.PublicKey
 	for _, line := range lines {
@@ -176,15 +176,15 @@ func (b *Bundle) RecoveryKit(vaultURL string) (string, error) {
 		return "", err
 	}
 	var w bytes.Buffer
-	fmt.Fprintf(&w, "secretgit recovery kit\n")
+	fmt.Fprintf(&w, "secretree recovery kit\n")
 	fmt.Fprintf(&w, "======================\n")
 	fmt.Fprintf(&w, "Vault ID:                %s\n", b.VaultID)
 	fmt.Fprintf(&w, "Vault URL:               %s\n", vaultURL)
 	fmt.Fprintf(&w, "Signing key fingerprint: %s\n", fp)
 	fmt.Fprintf(&w, "Printed:                 %s\n", time.Now().UTC().Format(time.RFC3339))
 	fmt.Fprintf(&w, "\nKeep this page offline. Anyone holding it can read every backup.\n")
-	fmt.Fprintf(&w, "Restore: docs/restore-by-hand.md in the secretgit repository, or the\n")
-	fmt.Fprintf(&w, "README.md inside the vault. Or: secretgit init --from-recovery-kit <file>\n")
+	fmt.Fprintf(&w, "Restore: docs/restore-by-hand.md in the secretree repository, or the\n")
+	fmt.Fprintf(&w, "README.md inside the vault. Or: secretree init --from-recovery-kit <file>\n")
 	fmt.Fprintf(&w, "\n--- age identity ---\n%s\n", strings.TrimSpace(b.AgeIdentity))
 	fmt.Fprintf(&w, "\n--- signing key (OpenSSH) ---\n%s", b.SigningKeyPEM)
 	if !strings.HasSuffix(b.SigningKeyPEM, "\n") {

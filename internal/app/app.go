@@ -1,4 +1,4 @@
-// Package app implements the secretgit commands on top of the lower-level
+// Package app implements the secretree commands on top of the lower-level
 // packages. Every command is a method on App so tests can drive them
 // in-process with a captured output.
 package app
@@ -13,14 +13,14 @@ import (
 	"filippo.io/age"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/keys"
-	"github.com/andraspalinkas/secretgit/internal/keystore"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/keys"
+	"github.com/andraspalinkas/secretree/internal/keystore"
 )
 
 // Version is stamped into manifests.
-var Version = "0.1.0-dev"
+var Version = "0.2.0-dev"
 
 // App carries output streams and options shared by all commands.
 type App struct {
@@ -100,7 +100,7 @@ func (a *App) openRepoAt(work, gitDir string) (*repo, error) {
 	}
 	kb, err := store.Get(cfg.VaultID)
 	if errors.Is(err, keystore.ErrNotFound) {
-		return nil, fmt.Errorf("keys for vault %s are not in the %s; run: secretgit init --from-recovery-kit <file> --vault %s", cfg.VaultID, store.Describe(), cfg.VaultURL)
+		return nil, fmt.Errorf("keys for vault %s are not in the %s; run: secretree init --from-recovery-kit <file> --vault %s", cfg.VaultID, store.Describe(), cfg.VaultURL)
 	}
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (r *repo) lock() (func(), error) {
 	}
 	if err := flock(f); err != nil {
 		f.Close()
-		return nil, errors.New("another secretgit run is in progress for this repository")
+		return nil, errors.New("another secretree run is in progress for this repository")
 	}
 	return func() {
 		_ = funlock(f)
@@ -135,7 +135,7 @@ func (r *repo) lock() (func(), error) {
 	}, nil
 }
 
-// tmpDir creates a private scratch directory under .git/secretgit/tmp.
+// tmpDir creates a private scratch directory under .git/secretree/tmp.
 // Plaintext bundles live here briefly; the directory is 0700 and removed
 // by the caller. A RAM-backed location is a planned improvement.
 func (r *repo) tmpDir(name string) (string, func(), error) {

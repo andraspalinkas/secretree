@@ -14,7 +14,7 @@ Build and test:
 
 ```sh
 go vet ./... && go test ./...
-go build -o bin/secretgit ./cmd/secretgit
+go build -o bin/secretree ./cmd/secretree
 ```
 
 Commit messages: what changed and why, in the imperative.

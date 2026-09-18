@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretree/internal/config"
 )
 
 // ScheduleOptions configures Schedule.
@@ -24,7 +24,7 @@ type ScheduleOptions struct {
 }
 
 // Schedule installs (or removes) a launchd agent on macOS or a systemd user
-// timer on Linux that runs `secretgit backup` for this repository.
+// timer on Linux that runs `secretree backup` for this repository.
 func (a *App) Schedule(o ScheduleOptions) error {
 	work, gitDir, err := locateRepo(o.Dir)
 	if err != nil {
@@ -41,14 +41,14 @@ func (a *App) Schedule(o ScheduleOptions) error {
 	if exe, err = filepath.EvalSymlinks(exe); err != nil {
 		return err
 	}
-	id := "secretgit-" + cfg.RepoID
+	id := "secretree-" + cfg.RepoID
 	switch runtime.GOOS {
 	case "darwin":
 		return a.scheduleLaunchd(id, exe, work, o)
 	case "linux":
 		return a.scheduleSystemd(id, exe, work, o)
 	default:
-		return fmt.Errorf("scheduling is not supported on %s; run `secretgit backup` from your own scheduler", runtime.GOOS)
+		return fmt.Errorf("scheduling is not supported on %s; run `secretree backup` from your own scheduler", runtime.GOOS)
 	}
 }
 
@@ -69,7 +69,7 @@ func (a *App) scheduleLaunchd(id, exe, work string, o ScheduleOptions) error {
 	home, _ := os.UserHomeDir()
 	label := "dev." + id
 	plist := filepath.Join(home, "Library", "LaunchAgents", label+".plist")
-	logDir := filepath.Join(home, "Library", "Logs", "secretgit")
+	logDir := filepath.Join(home, "Library", "Logs", "secretree")
 	uid := os.Getuid()
 	domain := fmt.Sprintf("gui/%d", uid)
 	if o.Show {
@@ -185,8 +185,8 @@ func (a *App) scheduleSystemd(id, exe, work string, o ScheduleOptions) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	svc := fmt.Sprintf("[Unit]\nDescription=secretgit backup of %s\n\n[Service]\nType=oneshot\nExecStart=%s -C %s backup\n", work, exe, work)
-	tm := fmt.Sprintf("[Unit]\nDescription=secretgit backup timer for %s\n\n[Timer]\n%sPersistent=true\n\n[Install]\nWantedBy=timers.target\n", work, onCal)
+	svc := fmt.Sprintf("[Unit]\nDescription=secretree backup of %s\n\n[Service]\nType=oneshot\nExecStart=%s -C %s backup\n", work, exe, work)
+	tm := fmt.Sprintf("[Unit]\nDescription=secretree backup timer for %s\n\n[Timer]\n%sPersistent=true\n\n[Install]\nWantedBy=timers.target\n", work, onCal)
 	if err := os.WriteFile(service, []byte(svc), 0o644); err != nil {
 		return err
 	}

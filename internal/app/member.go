@@ -11,12 +11,12 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/crypt"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/keys"
-	"github.com/andraspalinkas/secretgit/internal/keystore"
-	"github.com/andraspalinkas/secretgit/internal/vault"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/crypt"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/keys"
+	"github.com/andraspalinkas/secretree/internal/keystore"
+	"github.com/andraspalinkas/secretree/internal/vault"
 )
 
 // JoinOptions configures Join.
@@ -36,7 +36,7 @@ func (a *App) Join(o JoinOptions) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "secretgit-join-")
+	tmp, err := os.MkdirTemp("", "secretree-join-")
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func (a *App) Join(o JoinOptions) error {
 	reader := &vault.Reader{Dir: dir}
 	raw, err := reader.ReadFile(vault.MetaFile)
 	if err != nil {
-		return fmt.Errorf("not a secretgit vault (no %s)", vault.MetaFile)
+		return fmt.Errorf("not a secretree vault (no %s)", vault.MetaFile)
 	}
 	var m vault.Meta
 	if err := json.Unmarshal(raw, &m); err != nil {
@@ -61,7 +61,7 @@ func (a *App) Join(o JoinOptions) error {
 	kb, err := store.Get(m.VaultID)
 	if err == nil {
 		fp, _ := kb.Fingerprint()
-		return fmt.Errorf("this device already holds keys for vault %s (signer %s); print its join request with `secretgit member request`", m.VaultID, fp)
+		return fmt.Errorf("this device already holds keys for vault %s (signer %s); print its join request with `secretree member request`", m.VaultID, fp)
 	} else if !errors.Is(err, keystore.ErrNotFound) {
 		return err
 	}
@@ -89,7 +89,7 @@ func (a *App) Join(o JoinOptions) error {
 		a.logf("keys stored in %s. Send this join request to a current member:\n", store.Describe())
 		fmt.Fprint(a.Out, req)
 	}
-	a.logf("\nOnce they run `secretgit member add --request <file>`, clone with: secretgit clone %s", o.VaultURL)
+	a.logf("\nOnce they run `secretree member add --request <file>`, clone with: secretree clone %s", o.VaultURL)
 	return nil
 }
 
@@ -103,7 +103,7 @@ func joinRequest(kb *keys.Bundle, name string) (string, error) {
 		return "", err
 	}
 	fp, _ := kb.Fingerprint()
-	return fmt.Sprintf("secretgit join request\nvault: %s\nname: %s\nrecipient: %s\nsigner: %s\nfingerprint: %s\n", kb.VaultID, name, rec, line, fp), nil
+	return fmt.Sprintf("secretree join request\nvault: %s\nname: %s\nrecipient: %s\nsigner: %s\nfingerprint: %s\n", kb.VaultID, name, rec, line, fp), nil
 }
 
 // MemberRequest prints this device's join request (for an already-generated key).

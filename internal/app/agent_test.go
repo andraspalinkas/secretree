@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/andraspalinkas/secretgit/internal/collab"
+	"github.com/andraspalinkas/secretree/internal/collab"
 )
 
 func TestRemapLine(t *testing.T) {
@@ -63,16 +63,16 @@ func TestAgentMember(t *testing.T) {
 	// the agent joins on its own machine and is added with --role agent
 	homeBot := filepath.Join(homeA, "bot")
 	os.MkdirAll(homeBot, 0o755)
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeBot, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeBot, "sg"))
 	req := filepath.Join(homeBot, "join.txt")
 	if err := a.Join(JoinOptions{VaultURL: vaultDir, Name: "review-bot", Out: req}); err != nil {
 		t.Fatalf("join: %v", err)
 	}
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeA, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))
 	if err := a.MemberAdd(MemberOptions{Dir: src, Request: req, Role: "agent"}); err != nil {
 		t.Fatalf("member add: %v\n%s", err, out)
 	}
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeBot, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeBot, "sg"))
 	bot := filepath.Join(homeBot, "app")
 	if err := a.Clone(CloneOptions{VaultURL: vaultDir, Dir: bot}); err != nil {
 		t.Fatalf("clone: %v\n%s", err, out)
@@ -81,12 +81,12 @@ func TestAgentMember(t *testing.T) {
 	script := filepath.Join(homeBot, "review.sh")
 	write(t, homeBot, "review.sh", `#!/bin/sh
 set -e
-test -n "$SECRETGIT_PR" || { echo "no pr"; exit 1; }
-test -n "$SECRETGIT_BASE" && test -n "$SECRETGIT_COMMIT"
-git diff "$SECRETGIT_BASE...$SECRETGIT_COMMIT" | grep -q '^+feature' 
-secretgit -C "$SECRETGIT_REPO_DIR" ledger add --kind export --subject "diff of PR #$SECRETGIT_PR → fake-model" >/dev/null
-secretgit -C "$SECRETGIT_REPO_DIR" pr comment "$SECRETGIT_PR" --path f.txt --line 1 -m "consider a constant" >/dev/null
-secretgit -C "$SECRETGIT_REPO_DIR" pr review "$SECRETGIT_PR" --verdict approve -m "looks fine to a robot" >/dev/null
+test -n "$SECRETREE_PR" || { echo "no pr"; exit 1; }
+test -n "$SECRETREE_BASE" && test -n "$SECRETREE_COMMIT"
+git diff "$SECRETREE_BASE...$SECRETREE_COMMIT" | grep -q '^+feature' 
+secretree -C "$SECRETREE_REPO_DIR" ledger add --kind export --subject "diff of PR #$SECRETREE_PR → fake-model" >/dev/null
+secretree -C "$SECRETREE_REPO_DIR" pr comment "$SECRETREE_PR" --path f.txt --line 1 -m "consider a constant" >/dev/null
+secretree -C "$SECRETREE_REPO_DIR" pr review "$SECRETREE_PR" --verdict approve -m "looks fine to a robot" >/dev/null
 echo reviewed
 `)
 	os.Chmod(script, 0o755)
@@ -98,7 +98,7 @@ echo reviewed
 		t.Fatalf("agent job failed:\n%s", out)
 	}
 	// the agent's approval does not count; alice cannot merge yet
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeA, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))
 	if err := a.PRMerge(src, "1", "merge"); err == nil || !strings.Contains(err.Error(), "needs 1 approval") {
 		t.Fatalf("agent approval must not count: %v", err)
 	}
@@ -113,12 +113,12 @@ echo reviewed
 	if err := a.PRReview(src, "1", collab.VerdictApprove, "ok"); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeBot, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeBot, "sg"))
 	if err := a.PRMerge(bot, "1", "merge"); err == nil || !strings.Contains(err.Error(), "agent") {
 		t.Fatalf("agent must not merge: %v", err)
 	}
 	// resolve the agent's thread; ledger shows the export
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeA, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))
 	c, err := a.openPR(src)
 	if err != nil {
 		t.Fatal(err)

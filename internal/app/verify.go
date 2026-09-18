@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/crypt"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/vault"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/crypt"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/vault"
 )
 
 // prove fetches the vault afresh from the remote, verifies the whole chain,

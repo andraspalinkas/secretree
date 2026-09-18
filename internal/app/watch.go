@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/collab"
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/collab"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 // WatchOptions configures Watch.
@@ -21,7 +21,7 @@ type WatchOptions struct {
 	Dir           string
 	Interval      time.Duration // poll interval (default 2m)
 	Ntfy          string        // ntfy topic URL, e.g. https://ntfy.sh/my-team-x7
-	Exec          string        // shell command; the message is $SECRETGIT_MESSAGE
+	Exec          string        // shell command; the message is $SECRETREE_MESSAGE
 	Desktop       bool          // macOS / Linux desktop notification
 	Serve         string        // also listen here for host webhooks (any POST triggers a check)
 	IncludeTitles bool          // put PR titles in notifications (they leave the key boundary)
@@ -84,7 +84,7 @@ func (a *App) watchPass(r *repo, o WatchOptions, seen map[string]bool) (map[stri
 	if err != nil {
 		return seen, err
 	}
-	remote := secretgitRemote(r.Work)
+	remote := secretreeRemote(r.Work)
 	if remote != "" {
 		if _, err := gitx.Run(r.Work, "fetch", "--quiet", remote); err != nil {
 			return seen, err
@@ -121,7 +121,7 @@ func (a *App) watchPass(r *repo, o WatchOptions, seen map[string]bool) (map[stri
 	a.logf("watch: %s", strings.ReplaceAll(msg, "\n", " · "))
 	if o.Ntfy != "" {
 		req, _ := http.NewRequest("POST", o.Ntfy, bytes.NewReader([]byte(msg)))
-		req.Header.Set("Title", "secretgit: "+r.Cfg.Label)
+		req.Header.Set("Title", "secretree: "+r.Cfg.Label)
 		if resp, err := http.DefaultClient.Do(req); err != nil {
 			a.logf("watch: ntfy: %v", err)
 		} else {
@@ -129,11 +129,11 @@ func (a *App) watchPass(r *repo, o WatchOptions, seen map[string]bool) (map[stri
 		}
 	}
 	if o.Desktop {
-		notifyDesktop("secretgit: "+r.Cfg.Label, msg)
+		notifyDesktop("secretree: "+r.Cfg.Label, msg)
 	}
 	if o.Exec != "" {
 		cmd := exec.Command("/bin/sh", "-c", o.Exec)
-		cmd.Env = append(gitx.Env(), "SECRETGIT_MESSAGE="+msg, "SECRETGIT_REPO="+r.Cfg.Label)
+		cmd.Env = append(gitx.Env(), "SECRETREE_MESSAGE="+msg, "SECRETREE_REPO="+r.Cfg.Label)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			a.logf("watch: exec: %v %s", err, strings.TrimSpace(string(out)))
 		}

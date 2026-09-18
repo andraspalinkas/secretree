@@ -22,7 +22,7 @@ type Spec struct {
 	Root    string   // work tree root; Include paths are relative to it
 	Include []string // files or directories
 	Exclude []string // glob patterns (filepath.Match) against relative paths
-	PreHook string   // shell command run with $SECRETGIT_STAGE; its output dir is archived too
+	PreHook string   // shell command run with $SECRETREE_STAGE; its output dir is archived too
 }
 
 // Build writes the archive to out. It returns false if there was nothing
@@ -36,7 +36,7 @@ func Build(spec Spec, out string, stage string) (bool, error) {
 		}
 		cmd := exec.Command("/bin/sh", "-c", spec.PreHook)
 		cmd.Dir = spec.Root
-		cmd.Env = append(os.Environ(), "SECRETGIT_STAGE="+stage)
+		cmd.Env = append(os.Environ(), "SECRETREE_STAGE="+stage)
 		cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 		if err := cmd.Run(); err != nil {
 			return false, fmt.Errorf("state.pre_hook failed: %w", err)

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/andraspalinkas/secretgit/internal/collab"
+	"github.com/andraspalinkas/secretree/internal/collab"
 )
 
 // TestPullRequestFlow drives a PR through two devices, policy, CI and CD.
@@ -23,8 +23,8 @@ func TestPullRequestFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	// a pipeline the runner will find on its own
-	write(t, src, ".secretgit/ci", "#!/bin/sh\ntest -f README.md && echo ok\n")
-	if err := os.Chmod(filepath.Join(src, ".secretgit", "ci"), 0o755); err != nil {
+	write(t, src, ".secretree/ci", "#!/bin/sh\ntest -f README.md && echo ok\n")
+	if err := os.Chmod(filepath.Join(src, ".secretree", "ci"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	git(t, src, "add", "-A")
@@ -36,23 +36,23 @@ func TestPullRequestFlow(t *testing.T) {
 	// Bob joins on his own device
 	homeB := filepath.Join(homeA, "bob")
 	os.MkdirAll(homeB, 0o755)
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeB, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeB, "sg"))
 	req := filepath.Join(homeB, "join.txt")
 	if err := a.Join(JoinOptions{VaultURL: vaultDir, Name: "bob", Out: req}); err != nil {
 		t.Fatalf("join: %v\n%s", err, out)
 	}
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeA, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))
 	if err := a.MemberAdd(MemberOptions{Dir: src, Request: req}); err != nil {
 		t.Fatalf("member add: %v\n%s", err, out)
 	}
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeB, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeB, "sg"))
 	bob := filepath.Join(homeB, "app")
 	if err := a.Clone(CloneOptions{VaultURL: vaultDir, Dir: bob}); err != nil {
 		t.Fatalf("clone: %v\n%s", err, out)
 	}
 
 	// Alice opens a PR from a pushed branch
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeA, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))
 	git(t, src, "checkout", "-qb", "topic")
 	commit(t, src, "topic.txt", "topic\n", "topic work")
 	if o, err := gitOut(src, "push", "origin", "topic"); err != nil {
@@ -74,7 +74,7 @@ func TestPullRequestFlow(t *testing.T) {
 	if err := a.PRComment(src, "1", "alice here", "topic.txt", 1); err != nil {
 		t.Fatalf("alice comment: %v", err)
 	}
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeB, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeB, "sg"))
 	if err := a.PRComment(bob, "1", "bob here", "", 0); err != nil {
 		t.Fatalf("bob comment: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestPullRequestFlow(t *testing.T) {
 	}
 
 	// Alice merges now that policy passes; deploy agent ships main
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeA, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))
 	git(t, src, "checkout", "-q", "main")
 	out.Reset()
 	if err := a.PRMerge(src, "1", "merge"); err != nil {
@@ -149,7 +149,7 @@ func TestPullRequestFlow(t *testing.T) {
 		t.Fatal("deploy exported a .git directory")
 	}
 	// the deploy event is visible to Bob as a signed fact
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeB, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeB, "sg"))
 	c, err := a.openPR(bob)
 	if err != nil {
 		t.Fatal(err)

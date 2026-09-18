@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 // DefaultUIAddr is where the local UI listens.
@@ -73,7 +73,7 @@ func (a *App) UI(o UIOptions) error {
 		return err
 	}
 	url := "http://" + ln.Addr().String()
-	a.logf("secretgit ui: %s  (%s: %s)", url, source, repoDir)
+	a.logf("secretree ui: %s  (%s: %s)", url, source, repoDir)
 	if o.Open {
 		openBrowser(url)
 	}

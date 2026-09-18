@@ -1,14 +1,14 @@
 # goreleaser configuration: one static binary per platform, checksums,
 # and an archive that also carries the docs so an offline restore has them.
 version: 2
-project_name: secretgit
+project_name: secretree
 builds:
-  - main: ./cmd/secretgit
-    binary: secretgit
+  - main: ./cmd/secretree
+    binary: secretree
     env: [CGO_ENABLED=0]
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
-    ldflags: ["-s -w -X github.com/andraspalinkas/secretgit/internal/app.Version={{.Version}}"]
+    ldflags: ["-s -w -X github.com/andraspalinkas/secretree/internal/app.Version={{.Version}}"]
 archives:
   - formats: [tar.gz]
     format_overrides:

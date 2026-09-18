@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/andraspalinkas/secretgit/internal/collab"
-	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretree/internal/collab"
+	"github.com/andraspalinkas/secretree/internal/config"
 )
 
 // TestOneCommandInit: init wires the remote and pushes in one go, the kit
@@ -21,7 +21,7 @@ func TestOneCommandInit(t *testing.T) {
 	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: kit, Push: true}); err != nil {
 		t.Fatalf("init --push: %v\n%s", err, out)
 	}
-	if got := git(t, src, "remote", "get-url", "origin"); got != "secretgit::"+vaultDir {
+	if got := git(t, src, "remote", "get-url", "origin"); got != "secretree::"+vaultDir {
 		t.Fatalf("origin: %s", got)
 	}
 	if !strings.Contains(git(t, src, "branch", "-r"), "origin/feature") {

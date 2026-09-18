@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/crypt"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/vault"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/crypt"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/vault"
 )
 
 // mirrorSync brings the plaintext mirror to the vault's latest generation.
@@ -132,7 +132,7 @@ func setMirrorHead(mirror, want string, refs map[string]string) error {
 }
 
 // mirrorRefs lists what the helper advertises: heads, tags, and any
-// secretgit namespaces; never remotes or the backup-only extras.
+// secretree namespaces; never remotes or the backup-only extras.
 func mirrorRefs(mirror string) (map[string]string, error) {
 	all, err := gitx.RefMap(mirror)
 	if err != nil {
@@ -140,7 +140,7 @@ func mirrorRefs(mirror string) (map[string]string, error) {
 	}
 	out := map[string]string{}
 	for k, v := range all {
-		if strings.HasPrefix(k, "refs/heads/") || strings.HasPrefix(k, "refs/tags/") || strings.HasPrefix(k, "refs/secretgit/") || strings.HasPrefix(k, "refs/notes/") {
+		if strings.HasPrefix(k, "refs/heads/") || strings.HasPrefix(k, "refs/tags/") || strings.HasPrefix(k, "refs/secretree/") || strings.HasPrefix(k, "refs/notes/") {
 			out[k] = v
 		}
 	}

@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/keys"
-	"github.com/andraspalinkas/secretgit/internal/keystore"
+	"github.com/andraspalinkas/secretree/internal/keys"
+	"github.com/andraspalinkas/secretree/internal/keystore"
 )
 
 // HelperName is the executable name git looks for.
-const HelperName = "git-remote-secretgit"
+const HelperName = "git-remote-secretree"
 
 // CloneOptions configures Clone.
 type CloneOptions struct {
@@ -24,7 +24,7 @@ type CloneOptions struct {
 }
 
 // Clone imports keys if given, makes sure the helper is reachable, and runs
-// `git clone secretgit::<vault>#<repo>`.
+// `git clone secretree::<vault>#<repo>`.
 func (a *App) Clone(o CloneOptions) error {
 	if o.VaultURL == "" {
 		return errors.New("vault URL is required")
@@ -55,7 +55,7 @@ func (a *App) Clone(o CloneOptions) error {
 	if err != nil {
 		return err
 	}
-	spec := "secretgit::" + url
+	spec := "secretree::" + url
 	if o.RepoID != "" {
 		spec += "#" + o.RepoID
 	}
@@ -83,7 +83,7 @@ func ensureHelperInPath() (string, error) {
 	return dir + string(os.PathListSeparator) + path, nil
 }
 
-// InstallHelper symlinks git-remote-secretgit to this executable in dir
+// InstallHelper symlinks git-remote-secretree to this executable in dir
 // (default: the executable's own directory) and returns the directory.
 func InstallHelper(dir string) (string, error) {
 	exe, err := os.Executable()
@@ -123,6 +123,6 @@ func (a *App) InstallHelperCmd(dir string) error {
 	if !inPath {
 		a.logf("note: %s is not in your PATH; add it so git can find the helper", d)
 	}
-	a.logf("usage: git clone secretgit::<vault-url>[#<repo-id>]   or   git remote add origin secretgit::<vault-url>")
+	a.logf("usage: git clone secretree::<vault-url>[#<repo-id>]   or   git remote add origin secretree::<vault-url>")
 	return nil
 }

@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/collab"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/collab"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 // DeployOptions configures DeployAgent.
 type DeployOptions struct {
-	Dir          string        // a clone made with `secretgit clone`
+	Dir          string        // a clone made with `secretree clone`
 	Branch       string        // branch to deploy (default main)
 	To           string        // target directory (exported tree, no .git)
 	Cmd          string        // run after export, in To (e.g. "systemctl restart app")
@@ -61,7 +61,7 @@ func (a *App) deployPass(o DeployOptions) (string, error) {
 	if sha == "" {
 		return "", fmt.Errorf("branch %s not found", o.Branch)
 	}
-	marker := filepath.Join(o.To, ".secretgit-deployed")
+	marker := filepath.Join(o.To, ".secretree-deployed")
 	if cur, err := os.ReadFile(marker); err == nil && strings.TrimSpace(string(cur)) == sha {
 		return "", nil
 	}
@@ -75,7 +75,7 @@ func (a *App) deployPass(o DeployOptions) (string, error) {
 	if err := os.MkdirAll(o.To, 0o755); err != nil {
 		return "", err
 	}
-	tarPath := filepath.Join(os.TempDir(), "secretgit-deploy-"+short(sha)+".tar")
+	tarPath := filepath.Join(os.TempDir(), "secretree-deploy-"+short(sha)+".tar")
 	if err := gitx.RunToFile(c.r.Work, tarPath, "archive", "--format=tar", sha); err != nil {
 		return "", err
 	}
@@ -88,7 +88,7 @@ func (a *App) deployPass(o DeployOptions) (string, error) {
 	if o.Cmd != "" {
 		run := exec.Command("/bin/sh", "-c", o.Cmd)
 		run.Dir = o.To
-		run.Env = append(gitx.Env(), "SECRETGIT_COMMIT="+sha)
+		run.Env = append(gitx.Env(), "SECRETREE_COMMIT="+sha)
 		out, err := run.CombinedOutput()
 		if err != nil {
 			status, summary = collab.StatusFailure, fmt.Sprintf("%s failed: %v: %s", o.Cmd, err, truncate(strings.TrimSpace(string(out)), 200))

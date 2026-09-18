@@ -9,20 +9,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 var helperDir string
 
 // TestMain builds the real binary once so git can spawn it as a remote helper.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "secretgit-helper-")
+	dir, err := os.MkdirTemp("", "secretree-helper-")
 	if err != nil {
 		panic(err)
 	}
-	exe := filepath.Join(dir, "secretgit")
-	build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-o", exe, "../../cmd/secretgit")
+	exe := filepath.Join(dir, "secretree")
+	build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-o", exe, "../../cmd/secretree")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		panic("build: " + err.Error())
@@ -93,7 +93,7 @@ func TestRemoteHelperRoundTrip(t *testing.T) {
 		t.Fatalf("clone: %v\n%s", err, out)
 	}
 	assertCloneOf(t, src, b)
-	if got := git(t, b, "remote", "get-url", "origin"); got != "secretgit::"+vaultDir {
+	if got := git(t, b, "remote", "get-url", "origin"); got != "secretree::"+vaultDir {
 		t.Fatalf("origin url: %s", got)
 	}
 	if got := git(t, b, "tag"); !strings.Contains(got, "v1") {

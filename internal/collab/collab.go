@@ -2,7 +2,7 @@
 // signed JSON events in a git ref, so they travel through the encrypted
 // vault like any other object and no server ever holds them in plaintext.
 //
-// Layout of the tree at refs/secretgit/collab:
+// Layout of the tree at refs/secretree/collab:
 //
 //	pr/<id>/<unix>-<eventid>.json      the event
 //	pr/<id>/<unix>-<eventid>.json.sig  OpenSSH signature over the event bytes
@@ -25,13 +25,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 const (
-	Ref       = "refs/secretgit/collab"
-	OriginRef = "refs/secretgit/collab-origin"
-	Format    = "secretgit-collab/1"
+	Ref       = "refs/secretree/collab"
+	OriginRef = "refs/secretree/collab-origin"
+	Format    = "secretree-collab/1"
 
 	KindPR      = "pr"
 	KindComment = "comment"
@@ -144,7 +144,7 @@ func (s *Store) Append(e *Event) error {
 // commitFiles adds files to the collab tree in a new commit, using a
 // temporary index so the user's work tree and index are untouched.
 func (s *Store) commitFiles(files map[string][]byte, msg string) error {
-	tmp, err := os.CreateTemp("", "secretgit-index-")
+	tmp, err := os.CreateTemp("", "secretree-index-")
 	if err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func (s *Store) commitFiles(files map[string][]byte, msg string) error {
 	if err != nil {
 		return err
 	}
-	args := []string{"-c", "user.name=secretgit", "-c", "user.email=secretgit@localhost", "commit-tree", strings.TrimSpace(tree), "-m", msg}
+	args := []string{"-c", "user.name=secretree", "-c", "user.email=secretree@localhost", "commit-tree", strings.TrimSpace(tree), "-m", msg}
 	if parent != "" {
 		args = append(args, "-p", parent)
 	}
@@ -439,7 +439,7 @@ func (s *Store) Sync(remote string) error {
 				if err != nil {
 					return fmt.Errorf("collab merge conflict (should not happen with unique event files): %w", err)
 				}
-				commit, err := gitx.Run(s.Dir, "-c", "user.name=secretgit", "-c", "user.email=secretgit@localhost",
+				commit, err := gitx.Run(s.Dir, "-c", "user.name=secretree", "-c", "user.email=secretree@localhost",
 					"commit-tree", strings.TrimSpace(tree), "-p", local, "-p", origin, "-m", "collab: merge")
 				if err != nil {
 					return err
@@ -470,7 +470,7 @@ func (s *Store) Sync(remote string) error {
 	return errors.New("collab push kept being rejected; try again")
 }
 
-// Policy is .secretgit/policy.json at the base branch.
+// Policy is .secretree/policy.json at the base branch.
 type Policy struct {
 	RequiredApprovals int      `json:"required_approvals"`
 	RequiredChecks    []string `json:"required_checks"`
@@ -479,7 +479,7 @@ type Policy struct {
 // LoadPolicy reads the policy at a ref; absent means no requirements.
 func LoadPolicy(dir, ref string) Policy {
 	var p Policy
-	out, err := gitx.Run(dir, "show", ref+":"+path.Join(".secretgit", "policy.json"))
+	out, err := gitx.Run(dir, "show", ref+":"+path.Join(".secretree", "policy.json"))
 	if err != nil {
 		return p
 	}
@@ -488,4 +488,4 @@ func LoadPolicy(dir, ref string) Policy {
 }
 
 // FilePath helper for tests and docs.
-func PolicyPath(work string) string { return filepath.Join(work, ".secretgit", "policy.json") }
+func PolicyPath(work string) string { return filepath.Join(work, ".secretree", "policy.json") }

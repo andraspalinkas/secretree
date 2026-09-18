@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 // RemoteHelper implements git's remote-helper protocol for
-// `secretgit::<vault-url>[#<repo-id>]` remotes. git talks to us on
+// `secretree::<vault-url>[#<repo-id>]` remotes. git talks to us on
 // stdin/stdout; we keep a plaintext mirror in sync with the vault and
 // move objects between the user's repository and that mirror.
 //

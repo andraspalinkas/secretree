@@ -10,21 +10,21 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/andraspalinkas/secretgit/internal/collab"
-	"github.com/andraspalinkas/secretgit/internal/crypt"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/collab"
+	"github.com/andraspalinkas/secretree/internal/crypt"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
-// secretgitRemote returns the name of the remote that points at a vault
+// secretreeRemote returns the name of the remote that points at a vault
 // through the helper, or "" (backup-only repositories).
-func secretgitRemote(work string) string {
+func secretreeRemote(work string) string {
 	out, err := gitx.Run(work, "remote")
 	if err != nil {
 		return ""
 	}
 	for _, name := range strings.Fields(out) {
 		url, err := gitx.Run(work, "remote", "get-url", name)
-		if err == nil && strings.HasPrefix(strings.TrimSpace(url), "secretgit::") {
+		if err == nil && strings.HasPrefix(strings.TrimSpace(url), "secretree::") {
 			return name
 		}
 	}
@@ -76,7 +76,7 @@ func (a *App) openPR(dir string) (*prContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &prContext{r: r, vs: vs, store: a.collabStore(r, vs), remote: secretgitRemote(r.Work), agents: map[string]bool{}}
+	c := &prContext{r: r, vs: vs, store: a.collabStore(r, vs), remote: secretreeRemote(r.Work), agents: map[string]bool{}}
 	ourFP, _ := r.Keys.Fingerprint()
 	for _, m := range vs.Meta.Members {
 		if m.Role == "agent" && m.SignerFingerprint != "" {
@@ -469,7 +469,7 @@ func (a *App) PRMerge(dir, ref, method string) error {
 	if why := c.mergeCheck(pr, head, base); why != "" {
 		return errors.New("cannot merge: " + why)
 	}
-	wt, err := os.MkdirTemp("", "secretgit-merge-")
+	wt, err := os.MkdirTemp("", "secretree-merge-")
 	if err != nil {
 		return err
 	}
@@ -479,7 +479,7 @@ func (a *App) PRMerge(dir, ref, method string) error {
 		return err
 	}
 	msg := fmt.Sprintf("Merge pull request #%d: %s", pr.Number, pr.Title)
-	ident := []string{"-c", "user.name=" + c.r.Cfg.Label, "-c", "user.email=" + c.r.Cfg.Label + "@secretgit"}
+	ident := []string{"-c", "user.name=" + c.r.Cfg.Label, "-c", "user.email=" + c.r.Cfg.Label + "@secretree"}
 	switch method {
 	case "", "merge":
 		if _, err := gitx.Run(wt, append(ident, "merge", "--no-ff", "--no-edit", "-m", msg, head)...); err != nil {
@@ -526,7 +526,7 @@ func (a *App) PRMerge(dir, ref, method string) error {
 	return nil
 }
 
-// PolicyInit writes a default .secretgit/policy.json into the work tree.
+// PolicyInit writes a default .secretree/policy.json into the work tree.
 func (a *App) PolicyInit(dir string, approvals int, checks []string) error {
 	work, _, err := locateRepo(dir)
 	if err != nil {

@@ -33,7 +33,7 @@ func TestJoinAndMembers(t *testing.T) {
 
 	// device B has its own key store and generates its own keys
 	homeB := filepath.Join(homeA, "deviceB")
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeB, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeB, "sg"))
 	req := filepath.Join(homeB, "join.txt")
 	if err := os.MkdirAll(homeB, 0o755); err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestJoinAndMembers(t *testing.T) {
 	}
 
 	// A approves: vault.json gains a recipient and signer, and a full generation follows
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeA, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))
 	out.Reset()
 	if err := a.MemberAdd(MemberOptions{Dir: src, Request: req}); err != nil {
 		t.Fatalf("member add: %v\n%s", err, out)
@@ -65,7 +65,7 @@ func TestJoinAndMembers(t *testing.T) {
 	}
 
 	// B clones with its own key: generation 1 is opaque to it, 2 is readable
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeB, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeB, "sg"))
 	b := filepath.Join(homeB, "app")
 	out.Reset()
 	if err := a.Clone(CloneOptions{VaultURL: vaultDir, Dir: b}); err != nil {
@@ -84,7 +84,7 @@ func TestJoinAndMembers(t *testing.T) {
 	if o, err := gitOut(b, "push", "origin", "main"); err != nil {
 		t.Fatalf("push as B: %v\n%s", err, o)
 	}
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeA, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))
 	if o, err := gitOut(src, "pull", "--ff-only", "origin", "main"); err != nil {
 		t.Fatalf("pull as A: %v\n%s", err, o)
 	}
@@ -98,7 +98,7 @@ func TestJoinAndMembers(t *testing.T) {
 	if o, err := gitOut(src, "push", "origin", "main"); err != nil {
 		t.Fatalf("push after removal: %v\n%s", err, o)
 	}
-	t.Setenv("SECRETGIT_HOME", filepath.Join(homeB, "sg"))
+	t.Setenv("SECRETREE_HOME", filepath.Join(homeB, "sg"))
 	if o, err := gitOut(b, "fetch", "origin"); err == nil {
 		t.Fatalf("B should no longer be able to sync:\n%s", o)
 	}

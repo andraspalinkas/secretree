@@ -12,11 +12,11 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/andraspalinkas/secretgit/internal/archive"
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/crypt"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/vault"
+	"github.com/andraspalinkas/secretree/internal/archive"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/crypt"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/vault"
 )
 
 // vaultState is what a synced cache tells us about the vault.
@@ -36,7 +36,7 @@ func (a *App) loadVault(r *repo) (*vaultState, error) {
 		return nil, err
 	}
 	if empty {
-		return nil, errors.New("vault is empty; run secretgit init first")
+		return nil, errors.New("vault is empty; run secretree init first")
 	}
 	fp, _ := r.Keys.Fingerprint()
 	reader := &vault.Reader{Dir: r.Paths.Cache, CacheDir: filepath.Join(r.Paths.Root, "manifest-cache", strings.TrimPrefix(fp, "SHA256:"))}
@@ -197,7 +197,7 @@ func (a *App) writeGeneration(r *repo, vs *vaultState, status *config.Status, o 
 		Refs:          refs,
 		Prerequisites: prereqs,
 		Files:         files,
-		Tool:          "secretgit/" + Version,
+		Tool:          "secretree/" + Version,
 	}
 	if prereqs == nil {
 		m.Prerequisites = []string{}

@@ -13,9 +13,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/andraspalinkas/secretgit/internal/crypt"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/vault"
+	"github.com/andraspalinkas/secretree/internal/crypt"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/vault"
 )
 
 // LedgerEntry records one deliberate disclosure: a share link, an export,
@@ -34,7 +34,7 @@ type LedgerEntry struct {
 	PrevSHA256 *string    `json:"prev_sha256"`
 }
 
-const formatLedger = "secretgit-ledger/1"
+const formatLedger = "secretree-ledger/1"
 
 func ledgerDir(repoID string) string { return path.Join(vault.RepoDir(repoID), "ledger") }
 
@@ -192,7 +192,7 @@ func noteSuffix(n string) string {
 
 var _ = ssh.FingerprintSHA256
 
-// LedgerAdd records a disclosure made outside secretgit (an export to a
+// LedgerAdd records a disclosure made outside secretree (an export to a
 // model provider, a dashboard, a public mirror).
 func (a *App) LedgerAdd(dir, kind, subject, note string) error {
 	if kind == "" || subject == "" {

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/crypt"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/keys"
-	"github.com/andraspalinkas/secretgit/internal/keystore"
-	"github.com/andraspalinkas/secretgit/internal/vault"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/crypt"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/keys"
+	"github.com/andraspalinkas/secretree/internal/keystore"
+	"github.com/andraspalinkas/secretree/internal/vault"
 )
 
 // InitOptions configures Init.
@@ -144,9 +144,9 @@ func (a *App) Init(o InitOptions) error {
 		st, _ := config.LoadStatus(paths)
 		st.KitPending = true
 		_ = config.SaveStatus(paths, st)
-		a.logf("\nWhen it is on paper, run: secretgit kit --confirm   (status warns until then)")
+		a.logf("\nWhen it is on paper, run: secretree kit --confirm   (status warns until then)")
 		if o.KitOut != "" {
-			a.logf("To print it now:        secretgit kit --print %s", o.KitOut)
+			a.logf("To print it now:        secretree kit --print %s", o.KitOut)
 		}
 	}
 	if !o.NoRemote {
@@ -163,15 +163,15 @@ func (a *App) Init(o InitOptions) error {
 				return err
 			}
 		} else {
-			a.logf("\nNext: git push -u %s --all && git push %s --tags   (or: secretgit backup)", remote, remote)
+			a.logf("\nNext: git push -u %s --all && git push %s --tags   (or: secretree backup)", remote, remote)
 		}
 	} else {
-		a.logf("\nNext: secretgit backup")
+		a.logf("\nNext: secretree backup")
 	}
 	return nil
 }
 
-// wireRemote installs the helper and adds the secretgit:: remote when the
+// wireRemote installs the helper and adds the secretree:: remote when the
 // repository has no remote of that name yet.
 func (a *App) wireRemote(work, remote, url string) error {
 	pathEnv, err := ensureHelperInPath()
@@ -179,23 +179,23 @@ func (a *App) wireRemote(work, remote, url string) error {
 		return err
 	}
 	if !strings.Contains(os.Getenv("PATH"), filepath.Dir(exePath())) {
-		a.logf("helper:  git-remote-secretgit installed in %s; add that directory to your PATH (secretgit install-helper --dir /usr/local/bin puts it somewhere already on it)", filepath.Dir(exePath()))
+		a.logf("helper:  git-remote-secretree installed in %s; add that directory to your PATH (secretree install-helper --dir /usr/local/bin puts it somewhere already on it)", filepath.Dir(exePath()))
 	} else {
-		a.logf("helper:  git-remote-secretgit ready")
+		a.logf("helper:  git-remote-secretree ready")
 	}
 	_ = pathEnv
 	if cur, err := gitx.Run(work, "remote", "get-url", remote); err == nil {
 		cur = strings.TrimSpace(cur)
-		if cur == "secretgit::"+url {
+		if cur == "secretree::"+url {
 			a.logf("remote:  %s already points at the vault", remote)
 			return nil
 		}
-		return fmt.Errorf("remote %q already exists (%s); add the vault yourself: git remote add vault secretgit::%s", remote, cur, url)
+		return fmt.Errorf("remote %q already exists (%s); add the vault yourself: git remote add vault secretree::%s", remote, cur, url)
 	}
-	if _, err := gitx.Run(work, "remote", "add", remote, "secretgit::"+url); err != nil {
+	if _, err := gitx.Run(work, "remote", "add", remote, "secretree::"+url); err != nil {
 		return err
 	}
-	a.logf("remote:  %s = secretgit::%s", remote, url)
+	a.logf("remote:  %s = secretree::%s", remote, url)
 	return nil
 }
 
@@ -250,7 +250,7 @@ func (a *App) createHostRepo(url *string) (string, error) {
 		if _, err := exec.LookPath("gh"); err != nil {
 			return "", errors.New("github: the gh CLI is not installed (https://cli.github.com); or create the repository yourself and pass its URL")
 		}
-		out, err := exec.Command("gh", "repo", "create", slug, "--private", "--description", "secretgit vault (ciphertext only)").CombinedOutput()
+		out, err := exec.Command("gh", "repo", "create", slug, "--private", "--description", "secretree vault (ciphertext only)").CombinedOutput()
 		if err != nil && !strings.Contains(string(out), "already exists") {
 			return "", fmt.Errorf("gh repo create: %s", strings.TrimSpace(string(out)))
 		}
@@ -269,7 +269,7 @@ func (a *App) createHostRepo(url *string) (string, error) {
 		if _, err := exec.LookPath("glab"); err != nil {
 			return "", errors.New("gitlab: the glab CLI is not installed (https://gitlab.com/gitlab-org/cli); or create the project yourself and pass its URL")
 		}
-		out, err := exec.Command("glab", "repo", "create", slug, "--private", "--description", "secretgit vault (ciphertext only)").CombinedOutput()
+		out, err := exec.Command("glab", "repo", "create", slug, "--private", "--description", "secretree vault (ciphertext only)").CombinedOutput()
 		if err != nil && !strings.Contains(string(out), "already") {
 			return "", fmt.Errorf("glab repo create: %s", strings.TrimSpace(string(out)))
 		}
@@ -338,7 +338,7 @@ func (a *App) bootstrapVault(reader *vault.Reader, kb *keys.Bundle, branch, url 
 func (a *App) joinVault(store keystore.Store, reader *vault.Reader, kitIn string) (*keys.Bundle, *vault.Meta, error) {
 	raw, err := reader.ReadFile(vault.MetaFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("the remote has commits but no %s: not a secretgit vault", vault.MetaFile)
+		return nil, nil, fmt.Errorf("the remote has commits but no %s: not a secretree vault", vault.MetaFile)
 	}
 	var m vault.Meta
 	if err := json.Unmarshal(raw, &m); err != nil {
@@ -364,7 +364,7 @@ func (a *App) joinVault(store keystore.Store, reader *vault.Reader, kitIn string
 	} else {
 		kb, err = store.Get(m.VaultID)
 		if errors.Is(err, keystore.ErrNotFound) {
-			return nil, nil, fmt.Errorf("vault %s exists but its keys are not in the %s; pass --from-recovery-kit <file>, or `secretgit join` on a new device", m.VaultID, store.Describe())
+			return nil, nil, fmt.Errorf("vault %s exists but its keys are not in the %s; pass --from-recovery-kit <file>, or `secretree join` on a new device", m.VaultID, store.Describe())
 		}
 		if err != nil {
 			return nil, nil, err
@@ -382,7 +382,7 @@ func (a *App) joinVault(store keystore.Store, reader *vault.Reader, kitIn string
 }
 
 // autoInit configures a repository the first time the remote helper runs
-// in it (typically during `git clone secretgit::...`).
+// in it (typically during `git clone secretree::...`).
 func (a *App) autoInit(gitDir, helperURL string) error {
 	vaultURL, repoID := ParseHelperURL(helperURL)
 	url, err := ensureRemote(vaultURL)
@@ -399,7 +399,7 @@ func (a *App) autoInit(gitDir, helperURL string) error {
 		return err
 	}
 	if empty {
-		return fmt.Errorf("%s is an empty vault; run `secretgit init --vault %s` in a repository first", url, vaultURL)
+		return fmt.Errorf("%s is an empty vault; run `secretree init --vault %s` in a repository first", url, vaultURL)
 	}
 	reader := &vault.Reader{Dir: paths.Cache}
 	kb, meta, err := a.joinVault(store, reader, "")
@@ -425,9 +425,9 @@ func (a *App) autoInit(gitDir, helperURL string) error {
 	case len(ids) == 1:
 		repoID = ids[0]
 	case len(ids) == 0:
-		return fmt.Errorf("the vault holds no repositories yet; run `secretgit init --vault %s` in a repository first", vaultURL)
+		return fmt.Errorf("the vault holds no repositories yet; run `secretree init --vault %s` in a repository first", vaultURL)
 	default:
-		return fmt.Errorf("the vault holds several repositories; use secretgit::%s#<repo-id> (available: %s)", vaultURL, strings.Join(ids, ", "))
+		return fmt.Errorf("the vault holds several repositories; use secretree::%s#<repo-id> (available: %s)", vaultURL, strings.Join(ids, ", "))
 	}
 	if id, err := kb.Identity(); err == nil {
 		if pub, err := kb.PublicKey(); err == nil {

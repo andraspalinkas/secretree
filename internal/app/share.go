@@ -13,9 +13,9 @@ import (
 	"filippo.io/age"
 	"filippo.io/age/armor"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/share"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/share"
 )
 
 // ShareOptions configures Share.
@@ -157,7 +157,7 @@ func (a *App) Share(o ShareOptions) error {
 		a.logf("  expires %s (advisory: the viewer warns, the ledger records it)", s.Expires.Format(time.RFC3339))
 	}
 	if !o.NoLedger {
-		a.logf("recorded in the disclosure ledger (secretgit ledger)")
+		a.logf("recorded in the disclosure ledger (secretree ledger)")
 	}
 	return nil
 }

@@ -3,11 +3,11 @@
 Format: short ADR entries, newest last. Status: **accepted** / **proposed** /
 **superseded**.
 
-## 0001 — Name: secretgit — accepted (2026-09-15)
+## 0001 — Name: secretree — accepted (2026-09-15)
 
 The predecessor was a ~100-line private shell script (git bundle, openssl
 AES-CBC with a Keychain passphrase, an append-only mirror repo on GitLab).
-secretgit is an independent, standalone open-source project.
+secretree is an independent, standalone open-source project.
 
 ## 0002 — License: MIT — accepted (2026-09-15)
 
@@ -43,7 +43,7 @@ vault branch, never by rewriting.
 
 Owner's decision after weighing the candidates below. Go 1.27 is installed
 under `~/sdk/go` (no Homebrew on the machine); `PATH` is set in `~/.zshrc`.
-Module path is the bare name `secretgit` until a public home is chosen.
+Module path is the bare name `secretree` until a public home is chosen.
 
 Candidates were:
 
@@ -66,7 +66,7 @@ Everything in `docs/` stays language-neutral.
 ## 0008 — Key stores — accepted for MVP (2026-09-15)
 
 MVP: macOS Keychain (`security` CLI or Security.framework), item per key,
-service `secretgit`, account `<vault-id>/<key-role>`. Phase 2: Linux
+service `secretree`, account `<vault-id>/<key-role>`. Phase 2: Linux
 Secret Service (D-Bus), Windows Credential Manager. Hardware-backed keys
 (Secure Enclave via an age plugin, TPM) are phase 2+.
 
@@ -79,7 +79,7 @@ format is designed so a target only needs "put file" and "list/get files".
 
 ## 0010 — Vault clones are partial and checkout-less — accepted (2026-09-15)
 
-Both the persistent cache under `.git/secretgit/vault-cache` and the fresh
+Both the persistent cache under `.git/secretree/vault-cache` and the fresh
 clone made for every restore proof use `git clone --no-checkout
 --filter=blob:none`, falling back to a plain no-checkout clone when the
 server rejects filters. Manifests and only the bundles a restore needs are
@@ -97,7 +97,7 @@ the manifest's ref map is authoritative. `git bundle` refuses to write an
 empty bundle, and the alternative (forcing a full) would bloat the vault for
 nothing. A `full` generation always carries a bundle.
 
-## 0012 — Plaintext scratch space lives under `.git/secretgit/tmp` — accepted, revisit (2026-09-15)
+## 0012 — Plaintext scratch space lives under `.git/secretree/tmp` — accepted, revisit (2026-09-15)
 
 Bundles and state archives exist in plaintext for the duration of a run in
 a 0700 directory inside the repository's git dir, on the same disk as the
@@ -117,7 +117,7 @@ Architecture and roadmap: [vision.md](vision.md).
 ## 0014 — Collaboration data lives in git, clients enforce policy — accepted (2026-09-15)
 
 PRs, reviews, approvals and check results are signed git objects under
-`refs/secretgit/collab/*`, encrypted and synced like source (the
+`refs/secretree/collab/*`, encrypted and synced like source (the
 git-appraise / git-bug approach). No server ever holds plaintext, and
 policy (approvals, green CI before merge) is verifiable by every client
 because the inputs are signed. The user-facing surface is a local web UI,
@@ -158,7 +158,7 @@ anything the other members will accept.
 
 ## 0019 — Share pages are self-contained files with the key in the fragment — accepted (2026-09-15)
 
-No secretgit-hosted viewer and no dependency on the vault host serving
+No secretree-hosted viewer and no dependency on the vault host serving
 plaintext-fetchable blobs: the page carries viewer and ciphertext, decrypts
 in the browser with age-encryption (loaded from jsDelivr, pinned by
 version; self-hosting the viewer is the hardening path). Every share is a
@@ -166,13 +166,13 @@ ledger entry.
 
 ## 0020 — Local UI is read-only and loopback by default — accepted (2026-09-15)
 
-`secretgit ui` serves the mirror on 127.0.0.1 with forge-shaped URLs. A
+`secretree ui` serves the mirror on 127.0.0.1 with forge-shaped URLs. A
 non-loopback listen address is allowed for private networks and prints a
 warning. Writes (PRs, reviews) will come with the collaboration layer.
 
 ## 0021 — Pull requests are events in a git ref, merged by union — accepted (2026-09-15)
 
-`refs/secretgit/collab` holds signed JSON events with unique file names.
+`refs/secretree/collab` holds signed JSON events with unique file names.
 No sequence numbers to allocate, no server: concurrent writers merge with
 `git merge-tree`, and the helper's push rejection only ever means "fetch
 and merge the union", which the `pr` commands do automatically (three
@@ -181,8 +181,8 @@ suffix so simultaneous opens cannot collide.
 
 ## 0022 — Policy is enforced by clients and verifiable by clients — accepted (2026-09-15)
 
-`secretgit pr merge` refuses to merge without the approvals and green
-checks that `.secretgit/policy.json` requires, counting only reviews and
+`secretree pr merge` refuses to merge without the approvals and green
+checks that `.secretree/policy.json` requires, counting only reviews and
 checks of the *current* head commit. Because those are signed events,
 any client can recompute the verdict. A rogue client can still push a
 merge commit directly with git; that is visible (no matching state event,
@@ -191,7 +191,7 @@ preventable, and preventing it is a host-side branch protection concern.
 
 ## 0023 — The runner is a plain agent, not a workflow engine — accepted (2026-09-15)
 
-The runner executes what the repository already has (`.secretgit/ci`,
+The runner executes what the repository already has (`.secretree/ci`,
 `make ci`, or a command) in a detached worktree and records one signed
 check with the log. Matrix builds, caching and orchestration belong to
 the pipeline script or to `act`; the runner's job is to be the place
@@ -226,7 +226,7 @@ leave the key boundary. Own events are never announced.
 
 Loading a chain used to cost two `git cat-file` calls and an age
 decryption per generation. Manifests that this key has already verified
-and decrypted are cached under `.git/secretgit/manifest-cache/<key fp>/`
+and decrypted are cached under `.git/secretree/manifest-cache/<key fp>/`
 keyed by the vault blob id, so a reload is one `git ls-tree` plus the hash
 chain check. The cache is per key (a different key must not inherit
 another's decryptions) and is ignored when unreadable.
@@ -256,9 +256,21 @@ signed `resolve` event referencing the comment id.
 
 ## 0031 — Code on GitHub, website on GitLab + Vercel — accepted (2026-09-18)
 
-The tool's source is public at github.com/andraspalinkas/secretgit (module
+The tool's source is public at github.com/andraspalinkas/secretree (module
 path matches, so `go install …@latest` works; releases via goreleaser on
 tags). The website lives in its own repository, gitlab.com/andras.palinkas/
-secretgit-site, deployed by Vercel on every push to `main` at
-https://secretgit-site.vercel.app. The `site/` directory was removed from
+secretree-site, deployed by Vercel on every push to `main` at
+https://secretree-site.vercel.app. The `site/` directory was removed from
 the code repository to avoid two copies drifting.
+
+## 0032 — Renamed to secretree — accepted (2026-09-18)
+
+The project, binary, remote-helper scheme (`secretree::`), key-store
+service, local state directory (`.git/secretree/`), policy directory
+(`.secretree/`), collaboration ref (`refs/secretree/collab`), format ids
+(`secretree-vault/1`, `secretree-manifest/1`, `secretree-ledger/1`) and
+signature namespace (`secretree-v1`) all changed from the earlier name in
+one go, while no vaults exist outside the author's tests. "Git" is a
+trademark of the Software Freedom Conservancy; a name that does not
+contain it is cleaner to own and to search for. Vaults written by 0.1.0
+are not readable by 0.2.0 and are not meant to be migrated.

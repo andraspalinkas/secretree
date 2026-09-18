@@ -1,6 +1,6 @@
-# Restore by hand (no secretgit needed)
+# Restore by hand (no secretree needed)
 
-Use this when the machine that ran secretgit is gone. You need:
+Use this when the machine that ran secretree is gone. You need:
 
 - the **recovery kit** (printed at `init`): the age identity
   (`AGE-SECRET-KEY-1…`), the signing public key fingerprint, and the vault
@@ -33,11 +33,11 @@ import json; [print(l) for l in json.load(open("vault.json"))["allowed_signers"]
 PY
 # fingerprint(s) — must match the recovery kit
 awk '{print $3, $4}' allowed_signers | ssh-keygen -lf -
-ssh-keygen -Y verify -f allowed_signers -I secretgit -n secretgit-v1 \
+ssh-keygen -Y verify -f allowed_signers -I secretree -n secretree-v1 \
   -s vault.json.sig < vault.json
 ```
 
-`Good "secretgit" signature …` is the only acceptable output.
+`Good "secretree" signature …` is the only acceptable output.
 
 ## 2. Put the age identity somewhere private
 
@@ -59,7 +59,7 @@ R=repos/<repo-id>
 N=000001   # repeat for each generation up to G
 
 # a) signature over the manifest ciphertext
-ssh-keygen -Y verify -f allowed_signers -I secretgit -n secretgit-v1 \
+ssh-keygen -Y verify -f allowed_signers -I secretree -n secretree-v1 \
   -s $R/$N.manifest.age.sig < $R/$N.manifest.age
 
 # b) decrypt the manifest
@@ -121,5 +121,5 @@ tar -xf /tmp/sg/<G>.state.tar          # or: zstd -dc … | tar -x   if content_
 rm -rf /tmp/sg
 ```
 
-Then run secretgit `init --from-recovery-kit` on the new machine to put the
+Then run secretree `init --from-recovery-kit` on the new machine to put the
 identity back into the key store and resume backups into the **same** vault.

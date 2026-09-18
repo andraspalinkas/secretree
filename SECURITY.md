@@ -1,6 +1,6 @@
 # Security policy
 
-secretgit exists to protect source code from its own hosting provider.
+secretree exists to protect source code from its own hosting provider.
 Please report vulnerabilities privately rather than in a public issue.
 
 **Report to:** open a GitHub security advisory on this repository
@@ -17,7 +17,7 @@ that other members accept; silent data loss in backup, sync or restore.
 machine that holds a key; traffic analysis of ciphertext sizes and timing;
 availability of the host.
 
-**Cryptography:** secretgit contains no cryptographic primitives of its
+**Cryptography:** secretree contains no cryptographic primitives of its
 own. Encryption is age (filippo.io/age), signatures are OpenSSH signatures
 (github.com/hiddeco/sshsig over golang.org/x/crypto/ssh). Reports about
 those libraries belong upstream, but tell us too so we can pin a fixed

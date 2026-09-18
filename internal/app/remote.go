@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 // errPushRejected means another writer appended to the vault first.
@@ -155,7 +155,7 @@ func commitPush(cacheDir, branch string, files []string) error {
 	if _, err := gitx.Run(cacheDir, args...); err != nil {
 		return err
 	}
-	if _, err := gitx.Run(cacheDir, "-c", "user.name=secretgit", "-c", "user.email=secretgit@localhost",
+	if _, err := gitx.Run(cacheDir, "-c", "user.name=secretree", "-c", "user.email=secretree@localhost",
 		"commit", "--quiet", "--no-verify", "-m", "backup"); err != nil {
 		return err
 	}

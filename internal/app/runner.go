@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/collab"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/collab"
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 // RunnerOptions configures Runner.
 type RunnerOptions struct {
-	Dir      string        // a clone made with `secretgit clone`
+	Dir      string        // a clone made with `secretree clone`
 	Name     string        // check name (default "ci")
-	Cmd      string        // pipeline command; default: .secretgit/ci, then `make ci`
+	Cmd      string        // pipeline command; default: .secretree/ci, then `make ci`
 	Branches []string      // always-checked branches besides open PR heads (default: main)
 	Interval time.Duration // poll interval (default 60s)
 	Timeout  time.Duration // per job (default 30m)
@@ -75,15 +75,15 @@ func (a *App) runnerPass(o RunnerOptions) (int, error) {
 		if pr.State == collab.StateOpen {
 			if sha := c.headSHA(pr); sha != "" {
 				targets[sha] = target{what: fmt.Sprintf("#%d %s", pr.Number, pr.Head), env: []string{
-					"SECRETGIT_PR=" + fmt.Sprint(pr.Number), "SECRETGIT_PR_ID=" + pr.ID,
-					"SECRETGIT_BASE=" + c.baseSHA(pr), "SECRETGIT_BASE_BRANCH=" + pr.Base, "SECRETGIT_HEAD_BRANCH=" + pr.Head}}
+					"SECRETREE_PR=" + fmt.Sprint(pr.Number), "SECRETREE_PR_ID=" + pr.ID,
+					"SECRETREE_BASE=" + c.baseSHA(pr), "SECRETREE_BASE_BRANCH=" + pr.Base, "SECRETREE_HEAD_BRANCH=" + pr.Head}}
 			}
 		}
 	}
 	for _, br := range o.Branches {
 		if sha := c.baseSHA(&collab.PullRequest{Base: br}); sha != "" {
 			if _, isPR := targets[sha]; !isPR {
-				targets[sha] = target{what: br, env: []string{"SECRETGIT_BRANCH=" + br}}
+				targets[sha] = target{what: br, env: []string{"SECRETREE_BRANCH=" + br}}
 			}
 		}
 	}
@@ -107,7 +107,7 @@ func (a *App) runnerPass(o RunnerOptions) (int, error) {
 
 // runJob executes the pipeline for one commit in a detached worktree.
 func (a *App) runJob(c *prContext, o RunnerOptions, sha string, extraEnv []string) (status, summary, log string) {
-	wt, err := os.MkdirTemp("", "secretgit-job-")
+	wt, err := os.MkdirTemp("", "secretree-job-")
 	if err != nil {
 		return collab.StatusFailure, err.Error(), ""
 	}
@@ -119,21 +119,21 @@ func (a *App) runJob(c *prContext, o RunnerOptions, sha string, extraEnv []strin
 	cmd := o.Cmd
 	if cmd == "" {
 		switch {
-		case isExecutable(filepath.Join(wt, ".secretgit", "ci")):
-			cmd = "./.secretgit/ci"
+		case isExecutable(filepath.Join(wt, ".secretree", "ci")):
+			cmd = "./.secretree/ci"
 		case hasMakeTarget(wt, "ci"):
 			cmd = "make ci"
 		default:
-			return collab.StatusFailure, "no pipeline: add .secretgit/ci, a `ci` make target, or run the runner with --cmd", ""
+			return collab.StatusFailure, "no pipeline: add .secretree/ci, a `ci` make target, or run the runner with --cmd", ""
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), o.Timeout)
 	defer cancel()
 	run := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
 	run.Dir = wt
-	run.Env = append(gitx.Env(), "CI=1", "SECRETGIT_COMMIT="+sha, "SECRETGIT_CHECK="+o.Name, "SECRETGIT_REPO_DIR="+c.r.Work)
+	run.Env = append(gitx.Env(), "CI=1", "SECRETREE_COMMIT="+sha, "SECRETREE_CHECK="+o.Name, "SECRETREE_REPO_DIR="+c.r.Work)
 	run.Env = append(run.Env, extraEnv...)
-	if exe := exePath(); exe != "" { // let jobs call secretgit (pr comment, ledger add) even off PATH
+	if exe := exePath(); exe != "" { // let jobs call secretree (pr comment, ledger add) even off PATH
 		run.Env = append(run.Env, "PATH="+filepath.Dir(exe)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
 	var out bytes.Buffer

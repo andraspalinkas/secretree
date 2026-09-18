@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/keystore"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/keystore"
 )
 
 // Status prints the local view: what was backed up, what was proven.
@@ -50,15 +50,15 @@ func (a *App) Status(dir string) error {
 		a.logf("LAST ERROR:      %s (%s)", st.LastError, ago(st.LastErrorTime, 0))
 	}
 	if st.KitPending && st.KitConfirmed == nil {
-		a.logf("\nWARNING: the recovery kit of this vault has not been confirmed as printed. Without it a lost machine means lost backups. secretgit kit --confirm")
+		a.logf("\nWARNING: the recovery kit of this vault has not been confirmed as printed. Without it a lost machine means lost backups. secretree kit --confirm")
 	}
 	switch {
 	case st.LastGeneration == 0:
-		a.logf("\nno backup yet: run secretgit backup")
-	case st.LastProofGeneration < st.LastGeneration && secretgitRemote(work) == "":
-		a.logf("\nWARNING: generation %06d has NOT been proven restorable; run secretgit verify", st.LastGeneration)
+		a.logf("\nno backup yet: run secretree backup")
+	case st.LastProofGeneration < st.LastGeneration && secretreeRemote(work) == "":
+		a.logf("\nWARNING: generation %06d has NOT been proven restorable; run secretree verify", st.LastGeneration)
 	case st.LastProofGeneration < st.LastGeneration:
-		a.logf("\nnote: pushes are verified on every fetch; for a full rebuild proof of generation %06d run secretgit verify", st.LastGeneration)
+		a.logf("\nnote: pushes are verified on every fetch; for a full rebuild proof of generation %06d run secretree verify", st.LastGeneration)
 	}
 	return nil
 }
@@ -96,7 +96,7 @@ func (a *App) Kit(dir string, printPath string, confirm bool) error {
 		} else {
 			openBrowser("file://" + printPath)
 		}
-		a.logf("after printing: secretgit kit --confirm, then delete %s", printPath)
+		a.logf("after printing: secretree kit --confirm, then delete %s", printPath)
 	}
 	if confirm {
 		st, err := config.LoadStatus(paths)
@@ -112,7 +112,7 @@ func (a *App) Kit(dir string, printPath string, confirm bool) error {
 		a.logf("recovery kit confirmed as printed on %s", now.Format("2006-01-02"))
 	}
 	if printPath == "" && !confirm {
-		a.logf("usage: secretgit kit --print <file> | --confirm")
+		a.logf("usage: secretree kit --print <file> | --confirm")
 	}
 	return nil
 }

@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/andraspalinkas/secretgit/internal/archive"
-	"github.com/andraspalinkas/secretgit/internal/config"
-	"github.com/andraspalinkas/secretgit/internal/gitx"
-	"github.com/andraspalinkas/secretgit/internal/keys"
-	"github.com/andraspalinkas/secretgit/internal/keystore"
-	"github.com/andraspalinkas/secretgit/internal/vault"
+	"github.com/andraspalinkas/secretree/internal/archive"
+	"github.com/andraspalinkas/secretree/internal/config"
+	"github.com/andraspalinkas/secretree/internal/gitx"
+	"github.com/andraspalinkas/secretree/internal/keys"
+	"github.com/andraspalinkas/secretree/internal/keystore"
+	"github.com/andraspalinkas/secretree/internal/vault"
 )
 
 // RestoreOptions configures Restore.
@@ -43,7 +43,7 @@ func (a *App) Restore(o RestoreOptions) error {
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp(parent, ".secretgit-restore-")
+	tmp, err := os.MkdirTemp(parent, ".secretree-restore-")
 	if err != nil {
 		return err
 	}
@@ -180,6 +180,6 @@ func (a *App) Restore(o RestoreOptions) error {
 	if err := config.SaveStatus(paths, st); err != nil {
 		return err
 	}
-	a.logf("secretgit configured in the restored repository; `secretgit backup` continues the same chain")
+	a.logf("secretree configured in the restored repository; `secretree backup` continues the same chain")
 	return nil
 }

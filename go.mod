@@ -1,4 +1,4 @@
-module github.com/andraspalinkas/secretgit
+module github.com/andraspalinkas/secretree
 
 go 1.27.1
 
