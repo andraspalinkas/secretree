@@ -3,9 +3,11 @@ package app
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/andraspalinkas/secretree/internal/keys"
@@ -100,11 +102,30 @@ func InstallHelper(dir string) (string, error) {
 	if target, err := os.Readlink(link); err == nil && target == exe {
 		return dir, nil
 	}
+	if runtime.GOOS == "windows" {
+		link += ".exe"
+	}
 	_ = os.Remove(link)
-	if err := os.Symlink(exe, link); err != nil {
+	if runtime.GOOS != "windows" {
+		if err := os.Symlink(exe, link); err == nil {
+			return dir, nil
+		}
+	}
+	// no symlinks (Windows, some filesystems): copy the executable
+	src, err := os.Open(exe)
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(link, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	if err != nil {
 		return "", fmt.Errorf("install helper: %w", err)
 	}
-	return dir, nil
+	if _, err := io.Copy(dst, src); err != nil {
+		dst.Close()
+		return "", err
+	}
+	return dir, dst.Close()
 }
 
 // InstallHelperCmd is the user-facing installer.

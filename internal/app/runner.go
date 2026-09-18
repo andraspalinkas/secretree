@@ -2,10 +2,8 @@ package app
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -127,9 +125,14 @@ func (a *App) runJob(c *prContext, o RunnerOptions, sha string, extraEnv []strin
 			return collab.StatusFailure, "no pipeline: add .secretree/ci, a `ci` make target, or run the runner with --cmd", ""
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), o.Timeout)
-	defer cancel()
-	run := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
+	run := gitx.ShellCommand(cmd)
+	timer := time.AfterFunc(o.Timeout, func() {
+		if run.Process != nil {
+			_ = run.Process.Kill()
+		}
+	})
+	defer timer.Stop()
+	timedOut := func() bool { return !timer.Stop() }
 	run.Dir = wt
 	run.Env = append(gitx.Env(), "CI=1", "SECRETREE_COMMIT="+sha, "SECRETREE_CHECK="+o.Name, "SECRETREE_REPO_DIR="+c.r.Work)
 	run.Env = append(run.Env, extraEnv...)
@@ -146,7 +149,7 @@ func (a *App) runJob(c *prContext, o RunnerOptions, sha string, extraEnv []strin
 		log = "…(truncated)…\n" + log[len(log)-o.MaxLog:]
 	}
 	switch {
-	case ctx.Err() != nil:
+	case timedOut():
 		return collab.StatusFailure, fmt.Sprintf("timed out after %s", o.Timeout), log
 	case err != nil:
 		return collab.StatusFailure, fmt.Sprintf("%s failed in %s: %v", cmd, dur, err), log

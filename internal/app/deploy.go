@@ -86,7 +86,7 @@ func (a *App) deployPass(o DeployOptions) (string, error) {
 	}
 	status, summary := collab.StatusSuccess, "exported"
 	if o.Cmd != "" {
-		run := exec.Command("/bin/sh", "-c", o.Cmd)
+		run := gitx.ShellCommand(o.Cmd)
 		run.Dir = o.To
 		run.Env = append(gitx.Env(), "SECRETREE_COMMIT="+sha)
 		out, err := run.CombinedOutput()

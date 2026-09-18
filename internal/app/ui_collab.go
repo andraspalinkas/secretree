@@ -36,7 +36,7 @@ func (s *uiServer) quiet() *App { return &App{Out: io.Discard, Err: io.Discard} 
 
 func (s *uiServer) checkCSRF(w http.ResponseWriter, r *http.Request) bool {
 	if r.FormValue("csrf") != s.csrf {
-		http.Error(w, "bad csrf token; reload the page", 403)
+		http.Error(w, "bad csrf token; reload the page", http.StatusForbidden)
 		return false
 	}
 	return true

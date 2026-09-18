@@ -132,7 +132,7 @@ func (a *App) watchPass(r *repo, o WatchOptions, seen map[string]bool) (map[stri
 		notifyDesktop("secretree: "+r.Cfg.Label, msg)
 	}
 	if o.Exec != "" {
-		cmd := exec.Command("/bin/sh", "-c", o.Exec)
+		cmd := gitx.ShellCommand(o.Exec)
 		cmd.Env = append(gitx.Env(), "SECRETREE_MESSAGE="+msg, "SECRETREE_REPO="+r.Cfg.Label)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			a.logf("watch: exec: %v %s", err, strings.TrimSpace(string(out)))

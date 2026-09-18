@@ -8,13 +8,14 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+
+	"github.com/andraspalinkas/secretree/internal/gitx"
 )
 
 // Spec says what goes into the archive.
@@ -34,7 +35,7 @@ func Build(spec Spec, out string, stage string) (bool, error) {
 		if err := os.MkdirAll(stage, 0o700); err != nil {
 			return false, err
 		}
-		cmd := exec.Command("/bin/sh", "-c", spec.PreHook)
+		cmd := gitx.ShellCommand(spec.PreHook)
 		cmd.Dir = spec.Root
 		cmd.Env = append(os.Environ(), "SECRETREE_STAGE="+stage)
 		cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr

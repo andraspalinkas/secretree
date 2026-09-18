@@ -49,7 +49,7 @@ remote: git remote add origin secretree::<vault-url>[#<repo-id>] Docs: docs/vaul
 
 func main() {
 	// git invokes us as git-remote-secretree <name> <url>
-	if filepath.Base(os.Args[0]) == app.HelperName && len(os.Args) == 3 {
+	if base := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe"); base == app.HelperName && len(os.Args) == 3 {
 		a := &app.App{Out: os.Stderr, Err: os.Stderr}
 		if err := a.RemoteHelper(os.Args[1], os.Args[2], os.Stdin, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "secretree: %s\n", strings.TrimSpace(err.Error()))

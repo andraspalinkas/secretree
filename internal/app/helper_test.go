@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -22,7 +21,11 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	exe := filepath.Join(dir, "secretree")
-	build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-o", exe, "../../cmd/secretree")
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		panic("go not on PATH: " + err.Error())
+	}
+	build := exec.Command(goBin, "build", "-o", exe, "../../cmd/secretree")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		panic("build: " + err.Error())
