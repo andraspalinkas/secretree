@@ -274,3 +274,19 @@ one go, while no vaults exist outside the author's tests. "Git" is a
 trademark of the Software Freedom Conservancy; a name that does not
 contain it is cleaner to own and to search for. Vaults written by 0.1.0
 are not readable by 0.2.0 and are not meant to be migrated.
+
+## 0033 — The UI shows the guarantees, not only the code — accepted (2026-09-18)
+
+Two pages make the product's promises visible where people already look:
+`/vault` (the remote as the host sees it: the real file listing, the
+generations, `vault.json`, last backup and last proof) and `/ledger`
+(every deliberate disclosure). The header carries a restore-proof badge
+on every page. Syntax highlighting is a small Go tokenizer, Markdown for
+pull request text is goldmark without raw HTML; no scripts are loaded
+from anywhere.
+
+## 0034 — `doctor` is the first support step — accepted (2026-09-18)
+
+`secretree doctor` checks git, the helper, the key store, the repository
+configuration, the vault and chain, the recovery kit, the restore proof,
+policy, pipeline and the UI, and prints the fix next to each failure.

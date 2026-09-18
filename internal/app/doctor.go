@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -174,7 +173,7 @@ func (a *App) printChecks(cs []check) error {
 		}
 	}
 	if failed > 0 {
-		return errors.New(fmt.Sprintf("%d check(s) failed", failed))
+		return fmt.Errorf("%d check(s) failed", failed)
 	}
 	return nil
 }

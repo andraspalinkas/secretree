@@ -13,11 +13,10 @@ import (
 // touches the text otherwise. Good enough to read code; not a parser.
 
 type hlLang struct {
-	line      []string // line comment starters
-	block     [2]string
-	strings   []byte // quote characters
-	keywords  map[string]bool
-	hashFirst bool // "#" starts a comment only at line start (e.g. not for shell variables like $#)
+	line     []string // line comment starters
+	block    [2]string
+	strings  []byte // quote characters
+	keywords map[string]bool
 }
 
 func kw(words string) map[string]bool {
