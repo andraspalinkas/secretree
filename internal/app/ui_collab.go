@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"secretgit/internal/collab"
-	"secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/collab"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
 )
 
 func newToken() string {

@@ -14,10 +14,10 @@ import (
 	"filippo.io/age"
 	"golang.org/x/crypto/ssh"
 
-	"secretgit/internal/config"
-	"secretgit/internal/gitx"
-	"secretgit/internal/keys"
-	"secretgit/internal/keystore"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/keys"
+	"github.com/andraspalinkas/secretgit/internal/keystore"
 )
 
 // Version is stamped into manifests.

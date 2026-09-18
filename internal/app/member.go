@@ -11,12 +11,12 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"secretgit/internal/config"
-	"secretgit/internal/crypt"
-	"secretgit/internal/gitx"
-	"secretgit/internal/keys"
-	"secretgit/internal/keystore"
-	"secretgit/internal/vault"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/crypt"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/keys"
+	"github.com/andraspalinkas/secretgit/internal/keystore"
+	"github.com/andraspalinkas/secretgit/internal/vault"
 )
 
 // JoinOptions configures Join.

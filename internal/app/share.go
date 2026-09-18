@@ -13,9 +13,9 @@ import (
 	"filippo.io/age"
 	"filippo.io/age/armor"
 
-	"secretgit/internal/config"
-	"secretgit/internal/gitx"
-	"secretgit/internal/share"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/share"
 )
 
 // ShareOptions configures Share.

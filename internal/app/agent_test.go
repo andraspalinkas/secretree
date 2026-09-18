@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"secretgit/internal/collab"
+	"github.com/andraspalinkas/secretgit/internal/collab"
 )
 
 func TestRemapLine(t *testing.T) {

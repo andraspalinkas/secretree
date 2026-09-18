@@ -38,7 +38,7 @@ binary, integration-tested against real repositories):
 Not yet: IDE extension, S3/rclone targets, Linux/Windows key stores (Linux
 uses a 0600 file under `~/.config/secretgit`), re-encrypting history for
 members added later, notification relay. Roadmap in [docs/vision.md](docs/vision.md).
-Website: [site/index.html](site/index.html).
+Website: [secretgit-site.vercel.app](https://secretgit-site.vercel.app) (source on [GitLab](https://gitlab.com/andras.palinkas/secretgit-site)).
 
 ## Try everything in five minutes
 

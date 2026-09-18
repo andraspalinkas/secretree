@@ -1,6 +1,6 @@
 # secretgit — notes for coding agents
 
-Zero-knowledge git backup CLI in Go. Docs first: `docs/vault-format.md` is the
+Private git in Go: encrypted repositories on any host with PRs, reviews and CI intact. Module path github.com/andraspalinkas/secretgit; public repo on GitHub, website source on GitLab (andras.palinkas/secretgit-site) deployed by Vercel to https://secretgit-site.vercel.app. Docs first: `docs/vault-format.md` is the
 frozen v1 contract; do not change what lands on the remote without a
 decision entry in `docs/decisions.md` and an update to
 `docs/restore-by-hand.md`.

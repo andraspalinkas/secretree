@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"secretgit/internal/config"
-	"secretgit/internal/keystore"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/keystore"
 )
 
 // Status prints the local view: what was backed up, what was proven.

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"secretgit/internal/app"
+	"github.com/andraspalinkas/secretgit/internal/app"
 )
 
 const usage = `secretgit — zero-knowledge git backup onto any dumb storage

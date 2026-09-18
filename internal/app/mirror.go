@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"secretgit/internal/config"
-	"secretgit/internal/crypt"
-	"secretgit/internal/gitx"
-	"secretgit/internal/vault"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/crypt"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/vault"
 )
 
 // mirrorSync brings the plaintext mirror to the vault's latest generation.

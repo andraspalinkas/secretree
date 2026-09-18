@@ -1,4 +1,4 @@
-module secretgit
+module github.com/andraspalinkas/secretgit
 
 go 1.27.1
 

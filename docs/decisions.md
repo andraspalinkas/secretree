@@ -253,3 +253,12 @@ through `git diff -U0 <commit> <head>`: unchanged lines are followed to
 their new number (shown inline, marked), lines inside a changed hunk make
 the comment "outdated" (conversation only). Threads are resolved by a
 signed `resolve` event referencing the comment id.
+
+## 0031 — Code on GitHub, website on GitLab + Vercel — accepted (2026-09-18)
+
+The tool's source is public at github.com/andraspalinkas/secretgit (module
+path matches, so `go install …@latest` works; releases via goreleaser on
+tags). The website lives in its own repository, gitlab.com/andras.palinkas/
+secretgit-site, deployed by Vercel on every push to `main` at
+https://secretgit-site.vercel.app. The `site/` directory was removed from
+the code repository to avoid two copies drifting.

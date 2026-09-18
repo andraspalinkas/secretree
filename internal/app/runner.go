@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"secretgit/internal/collab"
-	"secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/collab"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
 )
 
 // RunnerOptions configures Runner.

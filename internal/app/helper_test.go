@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"secretgit/internal/config"
-	"secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
 )
 
 var helperDir string

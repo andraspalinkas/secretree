@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"secretgit/internal/gitx"
-	"secretgit/internal/vault"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/vault"
 )
 
 // env isolates the key store and HOME so tests never touch a real Keychain.

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"secretgit/internal/keys"
-	"secretgit/internal/keystore"
+	"github.com/andraspalinkas/secretgit/internal/keys"
+	"github.com/andraspalinkas/secretgit/internal/keystore"
 )
 
 // HelperName is the executable name git looks for.

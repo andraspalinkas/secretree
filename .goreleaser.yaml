@@ -8,7 +8,7 @@ builds:
     env: [CGO_ENABLED=0]
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
-    ldflags: ["-s -w -X secretgit/internal/app.Version={{.Version}}"]
+    ldflags: ["-s -w -X github.com/andraspalinkas/secretgit/internal/app.Version={{.Version}}"]
 archives:
   - formats: [tar.gz]
     format_overrides:
@@ -19,13 +19,3 @@ checksum:
   name_template: checksums.txt
 release:
   draft: true
-brews:
-  - repository:
-      owner: OWNER
-      name: homebrew-tap
-    homepage: https://github.com/OWNER/secretgit
-    description: "Private git: encrypted repositories on any host, with reviews and CI intact"
-    license: MIT
-    install: |
-      bin.install "secretgit"
-      bin.install_symlink "secretgit" => "git-remote-secretgit"

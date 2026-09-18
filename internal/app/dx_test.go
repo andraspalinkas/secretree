@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"secretgit/internal/collab"
-	"secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/collab"
+	"github.com/andraspalinkas/secretgit/internal/config"
 )
 
 // TestOneCommandInit: init wires the remote and pushes in one go, the kit

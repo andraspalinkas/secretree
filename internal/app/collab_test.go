@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"secretgit/internal/collab"
+	"github.com/andraspalinkas/secretgit/internal/collab"
 )
 
 // TestPullRequestFlow drives a PR through two devices, policy, CI and CD.

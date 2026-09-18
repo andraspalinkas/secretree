@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"secretgit/internal/collab"
-	"secretgit/internal/config"
-	"secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/collab"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
 )
 
 // WatchOptions configures Watch.

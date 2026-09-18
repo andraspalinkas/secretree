@@ -10,9 +10,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"secretgit/internal/collab"
-	"secretgit/internal/crypt"
-	"secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/collab"
+	"github.com/andraspalinkas/secretgit/internal/crypt"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
 )
 
 // secretgitRemote returns the name of the remote that points at a vault

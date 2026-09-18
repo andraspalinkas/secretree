@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"secretgit/internal/collab"
+	"github.com/andraspalinkas/secretgit/internal/collab"
 )
 
 // diffRow is one rendered line of a unified diff with enough context to

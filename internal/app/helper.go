@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"secretgit/internal/config"
-	"secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
 )
 
 // RemoteHelper implements git's remote-helper protocol for

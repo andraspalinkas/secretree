@@ -13,9 +13,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"secretgit/internal/crypt"
-	"secretgit/internal/gitx"
-	"secretgit/internal/vault"
+	"github.com/andraspalinkas/secretgit/internal/crypt"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/vault"
 )
 
 // LedgerEntry records one deliberate disclosure: a share link, an export,

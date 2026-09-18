@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/config"
 )
 
 // ScheduleOptions configures Schedule.

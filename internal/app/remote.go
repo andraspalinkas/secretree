@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
 )
 
 // errPushRejected means another writer appended to the vault first.

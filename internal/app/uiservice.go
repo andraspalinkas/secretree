@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"strings"
 
-	"secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/config"
 )
 
 // UIInstall keeps `secretgit ui` running in the background (launchd on

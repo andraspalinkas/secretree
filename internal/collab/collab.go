@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
 )
 
 const (

@@ -18,7 +18,7 @@ import (
 	"runtime"
 	"strings"
 
-	"secretgit/internal/keys"
+	"github.com/andraspalinkas/secretgit/internal/keys"
 )
 
 // ErrNotFound is returned when no bundle exists for a vault id.

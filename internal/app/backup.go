@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/config"
 )
 
 // BackupOptions configures Backup.

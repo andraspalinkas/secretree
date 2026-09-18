@@ -12,11 +12,11 @@ import (
 
 	"filippo.io/age"
 
-	"secretgit/internal/archive"
-	"secretgit/internal/config"
-	"secretgit/internal/crypt"
-	"secretgit/internal/gitx"
-	"secretgit/internal/vault"
+	"github.com/andraspalinkas/secretgit/internal/archive"
+	"github.com/andraspalinkas/secretgit/internal/config"
+	"github.com/andraspalinkas/secretgit/internal/crypt"
+	"github.com/andraspalinkas/secretgit/internal/gitx"
+	"github.com/andraspalinkas/secretgit/internal/vault"
 )
 
 // vaultState is what a synced cache tells us about the vault.
