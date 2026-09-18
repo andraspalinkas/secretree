@@ -45,7 +45,7 @@ commands:
 The vault is a git repository (SSH/HTTPS URL or a local directory) that only
 ever sees ciphertext. With the helper installed, a vault is an ordinary git
 remote: git remote add origin secretree::<vault-url>[#<repo-id>]
-Docs: https://secretree-site.vercel.app/docs/
+Docs: https://secretree.dev/docs/
 `
 
 func main() {

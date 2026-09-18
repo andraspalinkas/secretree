@@ -38,7 +38,7 @@ binary, integration-tested against real repositories):
 Not yet: IDE extension, S3/rclone targets, Linux/Windows key stores (Linux
 uses a 0600 file under `~/.config/secretree`), re-encrypting history for
 members added later, notification relay. Roadmap in [docs/vision.md](docs/vision.md).
-Website: [secretree-site.vercel.app](https://secretree-site.vercel.app) (source on [GitLab](https://gitlab.com/andras.palinkas/secretree-site)).
+Website and documentation: [secretree.dev](https://secretree.dev) (source on [GitLab](https://gitlab.com/andras.palinkas/secretree-site)).
 
 ## Try everything in five minutes
 
