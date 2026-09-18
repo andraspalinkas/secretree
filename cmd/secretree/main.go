@@ -12,7 +12,7 @@ import (
 	"github.com/andraspalinkas/secretree/internal/app"
 )
 
-const usage = `secretree — zero-knowledge git backup onto any dumb storage
+const usage = `secretree — private git: encrypted repositories on any host, with pull requests, reviews and CI intact
 
 usage: secretree [-C <repo dir>] [-v] <command> [options]
 
@@ -44,7 +44,8 @@ commands:
 
 The vault is a git repository (SSH/HTTPS URL or a local directory) that only
 ever sees ciphertext. With the helper installed, a vault is an ordinary git
-remote: git remote add origin secretree::<vault-url>[#<repo-id>] Docs: docs/vault-format.md, docs/restore-by-hand.md.
+remote: git remote add origin secretree::<vault-url>[#<repo-id>]
+Docs: https://secretree-site.vercel.app/docs/
 `
 
 func main() {
