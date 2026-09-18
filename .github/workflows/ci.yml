@@ -2,7 +2,9 @@
 # with it never should; see docs/vision.md, layer 4.
 name: ci
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
 jobs:
   test:
