@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/andraspalinkas/secretree/internal/config"
 	"github.com/andraspalinkas/secretree/internal/gitx"
@@ -57,7 +58,7 @@ func (a *App) UI(o UIOptions) error {
 	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
 		a.logf("WARNING: listening on %s exposes plaintext source to everyone who can reach that address; use it only on a private network (Tailscale, WireGuard)", o.Listen)
 	}
-	s := &uiServer{repo: repoDir, name: cfg.Label, work: work, source: source, app: a, csrf: newToken()}
+	s := &uiServer{repo: repoDir, name: cfg.Label, work: work, source: source, app: a, csrf: newToken(), paths: paths}
 	mux := http.NewServeMux()
 	s.collabRoutes(mux)
 	mux.HandleFunc("GET /{$}", s.home)
@@ -68,6 +69,8 @@ func (a *App) UI(o UIOptions) error {
 	mux.HandleFunc("GET /commits/{rest...}", s.commits)
 	mux.HandleFunc("GET /commit/{sha}", s.commit)
 	mux.HandleFunc("GET /search", s.search)
+	mux.HandleFunc("GET /ledger", s.ledger)
+	mux.HandleFunc("GET /vault", s.vault)
 	ln, err := net.Listen("tcp", o.Listen)
 	if err != nil {
 		return err
@@ -93,6 +96,27 @@ type uiServer struct {
 	repo, name, work, source string
 	app                      *App
 	csrf                     string
+	paths                    config.Paths
+}
+
+// proofBadge summarises the restore proof for the header.
+func (s *uiServer) proofBadge() (string, bool) {
+	st, err := config.LoadStatus(s.paths)
+	if err != nil || st == nil {
+		return "", false
+	}
+	if st.LastProof == nil {
+		if st.LastGeneration == 0 {
+			return "no backup yet", false
+		}
+		return "restore not proven", false
+	}
+	d := time.Since(*st.LastProof).Round(time.Minute)
+	txt := fmt.Sprintf("proven %s ago · gen %06d", d, st.LastProofGeneration)
+	if d < time.Minute {
+		txt = fmt.Sprintf("proven just now · gen %06d", st.LastProofGeneration)
+	}
+	return txt, st.LastProofGeneration >= st.LastGeneration
 }
 
 // splitRefPath resolves "<ref>/<path>" or "<ref-with-slashes>/-/<path>".
@@ -108,6 +132,8 @@ type crumb struct{ Name, URL string }
 
 type page struct {
 	Repo, Source, Title, Ref, Path, Kind string
+	Proof                                string
+	ProofOK                              bool
 	Crumbs                               []crumb
 	Branches, Tags                       []refLine
 	Entries                              []treeEntry
@@ -127,7 +153,7 @@ type treeEntry struct {
 }
 type codeLine struct {
 	N           int
-	Text        string
+	Text        template.HTML
 	Author, SHA string
 }
 type commitLine struct{ SHA, Short, Subject, Author, Date string }
@@ -139,6 +165,7 @@ type hit struct {
 
 func (s *uiServer) render(w http.ResponseWriter, p *page) {
 	p.Repo, p.Source = s.name, s.source
+	p.Proof, p.ProofOK = s.proofBadge()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'")
 	if err := uiTmpl.Execute(w, p); err != nil {
@@ -244,8 +271,9 @@ func (s *uiServer) blob(w http.ResponseWriter, r *http.Request) {
 	if strings.IndexByte(out, 0) >= 0 {
 		p.Message = "binary file"
 	} else {
+		h := newHighlighter(bp)
 		for i, l := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
-			p.Lines = append(p.Lines, codeLine{N: i + 1, Text: l})
+			p.Lines = append(p.Lines, codeLine{N: i + 1, Text: h.Line(l)})
 		}
 	}
 	s.render(w, p)
@@ -272,11 +300,12 @@ func (s *uiServer) blame(w http.ResponseWriter, r *http.Request) {
 	}
 	p := &page{Kind: "blob", Blame: true, Title: bp, Ref: ref, Path: bp, Crumbs: crumbs("blob", ref, bp)}
 	var cur codeLine
+	h := newHighlighter(bp)
 	for _, l := range strings.Split(out, "\n") {
 		switch {
 		case strings.HasPrefix(l, "\t"):
 			cur.N = len(p.Lines) + 1
-			cur.Text = l[1:]
+			cur.Text = h.Line(l[1:])
 			p.Lines = append(p.Lines, cur)
 		case strings.HasPrefix(l, "author "):
 			cur.Author = strings.TrimPrefix(l, "author ")
@@ -417,33 +446,57 @@ func absRel(work, p string) (string, error) {
 
 // uiCSS is shared by every page.
 const uiCSS = `<style>
-body{font:14px/1.45 -apple-system,system-ui,sans-serif;margin:0;color:#222;background:#fff}
-header{background:#24292f;color:#fff;padding:10px 16px;display:flex;gap:16px;align-items:center}
-header a{color:#fff;text-decoration:none;font-weight:600}header a.nav{font-weight:400;opacity:.85}header form{margin-left:auto}
-header input{padding:4px 8px;border-radius:4px;border:1px solid #888;width:260px}
+:root{--bg:#ffffff;--bg2:#f6f8fa;--fg:#1f2328;--fg2:#57606a;--line:#d0d7de;--link:#0969da;--head:#24292f;--head-fg:#fff;
+--add:#e6ffec;--del:#ffebe9;--hunk:#eef4fb;--hl:#fff8c5;--hl-line:#e0c800;--ok:#1a7f37;--bad:#cf222e;--warn:#9a6700;--purple:#8250df;--agent:#6e40c9;
+--kw:#cf222e;--str:#0a3069;--num:#0550ae;--cm:#6e7781}
+@media (prefers-color-scheme: dark){:root{--bg:#0d1117;--bg2:#161b22;--fg:#e6edf3;--fg2:#8d96a0;--line:#30363d;--link:#58a6ff;--head:#010409;--head-fg:#e6edf3;
+--add:#12261e;--del:#2d1214;--hunk:#121d2f;--hl:#3a3218;--hl-line:#6b5a1a;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--purple:#a371f7;--agent:#8957e5;
+--kw:#ff7b72;--str:#a5d6ff;--num:#79c0ff;--cm:#8b949e}}
+body{font:14px/1.45 -apple-system,system-ui,sans-serif;margin:0;color:var(--fg);background:var(--bg)}
+header{background:var(--head);color:var(--head-fg);padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header a{color:var(--head-fg);text-decoration:none;font-weight:600}header a.nav{font-weight:400;opacity:.85}header a.nav.here{opacity:1;font-weight:600;text-decoration:underline;text-underline-offset:6px}
+header form{margin-left:auto}header input{padding:4px 8px;border-radius:4px;border:1px solid var(--line);width:240px;background:var(--bg);color:var(--fg)}
 header small{opacity:.7}
+.badge{font-size:12px;padding:2px 9px;border-radius:10px;background:var(--bg2);color:var(--fg);border:1px solid var(--line);white-space:nowrap}
+.badge.ok{border-color:var(--ok);color:var(--ok)}.badge.warn{border-color:var(--warn);color:var(--warn)}
 main{padding:12px 16px;max-width:1200px}
-nav.crumbs a{color:#0969da;text-decoration:none}nav.crumbs{margin-bottom:10px}
-table{border-collapse:collapse;width:100%}td,th{padding:4px 8px;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
-a{color:#0969da}
-pre.code{margin:0;border:1px solid #ddd;border-radius:6px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+h3{margin:14px 0 8px}h4{margin:18px 0 8px}
+nav.crumbs a{color:var(--link);text-decoration:none}nav.crumbs{margin-bottom:10px}
+table{border-collapse:collapse;width:100%}td,th{padding:5px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--fg2);font-weight:600}
+a{color:var(--link)}
+pre.code{margin:0;border:1px solid var(--line);border-radius:6px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg)}
 pre.code div{display:flex;white-space:pre}
-pre.code div:target{background:#fff8c5}
-pre.code .n{width:52px;text-align:right;padding:0 8px;color:#999;user-select:none;flex:none}
-pre.code .n a{color:#999;text-decoration:none}
-pre.code .bl{width:200px;flex:none;color:#666;padding:0 8px;overflow:hidden;text-overflow:ellipsis}
+pre.code div:target{background:var(--hl)}
+pre.code .n{width:52px;text-align:right;padding:0 8px;color:var(--fg2);user-select:none;flex:none}
+pre.code .n a{color:var(--fg2);text-decoration:none}
+pre.code .bl{width:200px;flex:none;color:var(--fg2);padding:0 8px;overflow:hidden;text-overflow:ellipsis}
 pre.code .t{padding:0 8px}
-.diff{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid #ddd;border-radius:6px;overflow:auto}
-.diff div{white-space:pre;padding:0 8px}.diff .a{background:#e6ffec}.diff .d{background:#ffebe9}.diff .k{color:#0969da;background:#f6f8fa}.diff .f{font-weight:600;background:#f6f8fa;margin-top:8px}.diff .h{color:#666}
-.sha{font-family:ui-monospace,Menlo,monospace;color:#666}
-.muted{color:#666}
+.kw{color:var(--kw)}.str{color:var(--str)}.num{color:var(--num)}.cm{color:var(--cm);font-style:italic}
+.diff{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--line);border-radius:6px;overflow:auto;background:var(--bg)}
+.diff div{white-space:pre;padding:0 8px}.diff .a{background:var(--add)}.diff .d{background:var(--del)}.diff .k{color:var(--link);background:var(--hunk)}.diff .f{font-weight:600;background:var(--bg2);margin-top:8px}.diff .h{color:var(--fg2)}
+.sha{font-family:ui-monospace,Menlo,monospace;color:var(--fg2)}
+.muted{color:var(--fg2)}
+.md p{margin:0 0 8px}.md p:last-child{margin:0}.md pre{background:var(--bg2);padding:8px;border-radius:5px;overflow:auto;font-size:12px}.md code{background:var(--bg2);padding:1px 4px;border-radius:3px;font-size:12px}.md ul,.md ol{margin:0 0 8px;padding-left:20px}.md blockquote{margin:0 0 8px;padding-left:10px;border-left:3px solid var(--line);color:var(--fg2)}
+.box{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0}
+.cipher{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--fg2)}
+.two{display:flex;gap:12px;flex-wrap:wrap}.two>div{flex:1;min-width:280px}
 </style>
 `
 
+// uiHeader is the bar shared by every page. It needs Repo, Source, Kind,
+// Proof (text) and ProofOK on the page value.
+const uiHeader = `<header><a href="/">{{.Repo}}</a>
+<a href="/" class="nav{{if eq .Kind "home" "tree" "blob" "commits" "commit" "search"}} here{{end}}">code</a>
+<a href="/pulls" class="nav{{if eq .Kind "list" "pr" "new"}} here{{end}}">pull requests</a>
+<a href="/ledger" class="nav{{if eq .Kind "ledger"}} here{{end}}">ledger</a>
+<a href="/vault" class="nav{{if eq .Kind "vault"}} here{{end}}">vault</a>
+<small>{{.Source}}</small>
+{{if .Proof}}<a href="/vault" class="badge {{if .ProofOK}}ok{{else}}warn{{end}}" title="restore proof">{{.Proof}}</a>{{end}}
+<form action="/search"><input name="q" placeholder="search code" value="{{.Query}}"><input type="hidden" name="ref" value="{{if .Ref}}{{.Ref}}{{else}}HEAD{{end}}"></form></header>`
+
 var uiTmpl = template.Must(template.New("ui").Parse(`<!doctype html>
-<meta charset="utf-8"><title>{{.Repo}}: {{.Title}}</title>
-` + uiCSS + `<header><a href="/">{{.Repo}}</a><a href="/pulls" class="nav">pull requests</a><small>{{.Source}}</small>
-<form action="/search"><input name="q" placeholder="search code" value="{{.Query}}"><input type="hidden" name="ref" value="{{if .Ref}}{{.Ref}}{{else}}HEAD{{end}}"></form></header>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Repo}}: {{.Title}}</title>
+` + uiCSS + uiHeader + `
 <main>
 {{if .Crumbs}}<nav class="crumbs">{{range $i,$c := .Crumbs}}{{if $i}} / {{end}}<a href="{{$c.URL}}">{{$c.Name}}</a>{{end}}
 {{if eq .Kind "blob"}} &nbsp;<span class="muted">{{if .Blame}}<a href="/blob/{{.Ref}}/{{.Path}}">normal</a>{{else}}<a href="/blame/{{.Ref}}/{{.Path}}">blame</a>{{end}} · <a href="/raw/{{.Ref}}/{{.Path}}">raw</a> · <a href="/commits/{{.Ref}}">history</a></span>{{end}}</nav>{{end}}

@@ -24,6 +24,7 @@ commands:
   verify    [--generation N] [--quick] [--all]
   restore   --vault <url|dir> --to <dir> [--repo-id <id>] [--generation N] [--from-recovery-kit <file>] [--no-state]
   status
+  doctor                                     # every check a support request starts with, with the fix
   clone     <vault-url> [dir] [--repo-id <id>] [--from-recovery-kit <file>]
   install-helper [--dir <bindir>]     # makes "git clone secretree::<vault-url>" work
   schedule  --every <duration> | --daily HH:MM | --remove | --show
@@ -35,7 +36,7 @@ commands:
   watch     --ntfy <url> | --desktop | --exec <cmd> [--serve :8787] [--include-titles]   # activity notifications
   pr        open --title <t> [--base main] [--head <branch>] | list [--all] | show <#n> | comment <#n> -m <text> [--path f --line n]
             approve <#n> [-m] | request-changes <#n> -m | review <#n> --verdict <v> [-m] | resolve <#n> <comment-id>
-            merge <#n> [--method merge|squash|ff] | close <#n>
+            diff <#n> [--stat] | checkout <#n> | merge <#n> [--method merge|squash|ff] | close <#n>
   policy    [--approvals 1] [--checks ci]        # writes .secretree/policy.json (commit it on the base branch)
   runner    [--name ci] [--cmd <sh>] [--branches main] [--interval 60s] [--once]   # CI agent on a key-holding machine
   deploy-agent --to <dir> [--branch main] [--cmd <sh>] [--require-check ci] [--once]  # pull-based CD on the target host
@@ -134,6 +135,8 @@ func main() {
 		err = a.Restore(o)
 	case "status":
 		err = a.Status(*dir)
+	case "doctor":
+		err = a.Doctor(*dir)
 	case "clone":
 		fs := flag.NewFlagSet("clone", flag.ExitOnError)
 		o := app.CloneOptions{}
@@ -260,7 +263,7 @@ func main() {
 		err = a.Link(*dir, pos[0], *ref)
 	case "pr":
 		if len(rest) == 0 {
-			fmt.Fprintln(os.Stderr, "usage: secretree pr open|list|show|comment|review|approve|request-changes|resolve|merge|close")
+			fmt.Fprintln(os.Stderr, "usage: secretree pr open|list|show|diff|checkout|comment|review|approve|request-changes|resolve|merge|close")
 			os.Exit(2)
 		}
 		sub, subrest := rest[0], rest[1:]
@@ -275,6 +278,7 @@ func main() {
 		all := fs.Bool("all", false, "include merged and closed")
 		method := fs.String("method", "merge", "merge | squash | ff")
 		verdict := fs.String("verdict", "", "approve | request_changes | comment (for: pr review)")
+		stat := fs.Bool("stat", false, "diffstat only (for: pr diff)")
 		pos := parseAll(fs, subrest)
 		ref := ""
 		if len(pos) > 0 {
@@ -308,8 +312,12 @@ func main() {
 			err = a.PRMerge(*dir, ref, *method)
 		case "close":
 			err = a.PRClose(*dir, ref)
+		case "checkout":
+			err = a.PRCheckout(*dir, ref)
+		case "diff":
+			err = a.PRDiff(*dir, ref, *stat)
 		default:
-			fmt.Fprintln(os.Stderr, "usage: secretree pr open|list|show|comment|review|approve|request-changes|resolve|merge|close")
+			fmt.Fprintln(os.Stderr, "usage: secretree pr open|list|show|diff|checkout|comment|review|approve|request-changes|resolve|merge|close")
 			os.Exit(2)
 		}
 	case "policy":

@@ -99,7 +99,7 @@ func inlineComments(c *prContext, pr *collab.PullRequest, head string) map[strin
 		if who == "" {
 			who = e.Actor
 		}
-		row := eventRow{ID: e.ID, Kind: e.Kind, Who: who, When: e.Created.Format("2006-01-02 15:04"), Body: e.Body, Path: e.Path, Line: line, Commit: short(e.Commit),
+		row := eventRow{ID: e.ID, Kind: e.Kind, Who: who, When: e.Created.Format("2006-01-02 15:04"), Body: e.Body, BodyHTML: md(e.Body), Path: e.Path, Line: line, Commit: short(e.Commit),
 			Agent: c.agents[e.Actor], ResolvedBy: resolved[e.ID], Moved: moved}
 		k := e.Path + ":" + strconv.Itoa(line)
 		out[k] = append(out[k], row)

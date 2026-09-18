@@ -10,4 +10,7 @@ require (
 	golang.org/x/sys v0.48.0
 )
 
-require filippo.io/hpke v0.4.0 // indirect
+require (
+	filippo.io/hpke v0.4.0 // indirect
+	github.com/yuin/goldmark v1.7.13 // indirect
+)

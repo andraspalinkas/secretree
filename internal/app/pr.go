@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -174,8 +175,15 @@ func (a *App) PROpen(o PROpenOptions) error {
 		return fmt.Errorf("head and base are both %s", o.Head)
 	}
 	if c.remote != "" {
-		if _, err := gitx.Run(c.r.Work, "rev-parse", "--verify", "-q", "refs/remotes/"+c.remote+"/"+o.Head); err != nil {
-			return fmt.Errorf("branch %s is not on the vault yet: git push %s %s", o.Head, c.remote, o.Head)
+		local, lerr := gitx.Run(c.r.Work, "rev-parse", "--verify", "-q", "refs/heads/"+o.Head)
+		tracked, terr := gitx.Run(c.r.Work, "rev-parse", "--verify", "-q", "refs/remotes/"+c.remote+"/"+o.Head)
+		if lerr == nil && (terr != nil || strings.TrimSpace(local) != strings.TrimSpace(tracked)) {
+			a.logf("pushing %s to %s…", o.Head, c.remote)
+			if err := a.pushBranch(c.r.Work, c.remote, o.Head); err != nil {
+				return err
+			}
+		} else if lerr != nil && terr != nil {
+			return fmt.Errorf("branch %s exists neither locally nor on the vault", o.Head)
 		}
 	}
 	num := collab.NextNumber(c.prs)
@@ -600,4 +608,85 @@ func hunkRange(s string) (start, length int) {
 		fmt.Sscanf(b, "%d", &length)
 	}
 	return
+}
+
+// pushBranch pushes one branch through the helper with the helper reachable.
+func (a *App) pushBranch(work, remote, branch string) error {
+	pathEnv, err := ensureHelperInPath()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command("git", "push", "--quiet", "-u", remote, branch)
+	cmd.Dir = work
+	cmd.Env = append(gitx.Env(), "PATH="+pathEnv)
+	cmd.Stdout, cmd.Stderr = a.Err, a.Err
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git push %s %s: %w", remote, branch, err)
+	}
+	return nil
+}
+
+// PRCheckout fetches a pull request's head branch and checks it out.
+func (a *App) PRCheckout(dir, ref string) error {
+	c, err := a.openPR(dir)
+	if err != nil {
+		return err
+	}
+	pr, err := collab.Resolve(c.prs, ref)
+	if err != nil {
+		return err
+	}
+	head := c.headSHA(pr)
+	if head == "" {
+		return fmt.Errorf("head branch %s of #%d is not available", pr.Head, pr.Number)
+	}
+	if _, err := gitx.Run(c.r.Work, "rev-parse", "--verify", "-q", "refs/heads/"+pr.Head); err == nil {
+		if _, err := gitx.Run(c.r.Work, "checkout", "--quiet", pr.Head); err != nil {
+			return err
+		}
+		if c.remote != "" {
+			_, _ = gitx.Run(c.r.Work, "merge", "--ff-only", "--quiet", "refs/remotes/"+c.remote+"/"+pr.Head)
+		}
+	} else {
+		start := head
+		if c.remote != "" {
+			start = "refs/remotes/" + c.remote + "/" + pr.Head
+		}
+		if _, err := gitx.Run(c.r.Work, "checkout", "--quiet", "-b", pr.Head, "--track", start); err != nil {
+			if _, err2 := gitx.Run(c.r.Work, "checkout", "--quiet", "-b", pr.Head, head); err2 != nil {
+				return err
+			}
+		}
+	}
+	a.logf("switched to %s (#%d, %s)", pr.Head, pr.Number, short(head))
+	return nil
+}
+
+// PRDiff prints the diff of a pull request against its base.
+func (a *App) PRDiff(dir, ref string, stat bool) error {
+	c, err := a.openPR(dir)
+	if err != nil {
+		return err
+	}
+	pr, err := collab.Resolve(c.prs, ref)
+	if err != nil {
+		return err
+	}
+	head, base := c.headSHA(pr), c.baseSHA(pr)
+	args := []string{"diff"}
+	if stat {
+		args = append(args, "--stat")
+	}
+	if pr.State == collab.StateMerged && pr.MergeCommit != "" {
+		a.logf("merged as %s", short(pr.MergeCommit))
+		args = append(args, pr.MergeCommit+"^1", pr.MergeCommit)
+	} else {
+		args = append(args, base+"..."+head)
+	}
+	out, err := gitx.Run(c.r.Work, args...)
+	if err != nil {
+		return err
+	}
+	fmt.Fprint(a.Out, out)
+	return nil
 }
