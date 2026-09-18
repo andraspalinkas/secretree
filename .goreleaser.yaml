@@ -1,5 +1,6 @@
 # goreleaser configuration: one static binary per platform, checksums,
-# and an archive that also carries the docs so an offline restore has them.
+# keyless cosign signatures and an SBOM per archive, and a Homebrew formula
+# (uploaded to andraspalinkas/homebrew-tap when HOMEBREW_TAP_TOKEN is set).
 version: 2
 project_name: secretree
 builds:
@@ -9,6 +10,7 @@ builds:
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     ldflags: ["-s -w -X github.com/andraspalinkas/secretree/internal/app.Version={{.Version}}"]
+    mod_timestamp: "{{ .CommitTimestamp }}"
 archives:
   - formats: [tar.gz]
     format_overrides:
@@ -17,5 +19,46 @@ archives:
     files: [LICENSE, README.md, docs/*]
 checksum:
   name_template: checksums.txt
+sboms:
+  - artifacts: archive
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args: ["sign-blob", "--yes", "--output-certificate=${certificate}", "--output-signature=${signature}", "${artifact}"]
+    artifacts: checksum
 release:
   draft: true
+  footer: |
+    ## Verify
+
+    Every archive is listed in `checksums.txt`, which is signed with a keyless
+    Sigstore certificate bound to this repository's release workflow:
+
+    ```sh
+    cosign verify-blob checksums.txt \
+      --certificate checksums.txt.pem --signature checksums.txt.sig \
+      --certificate-identity-regexp 'https://github.com/andraspalinkas/secretree/' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com
+    shasum -a 256 -c --ignore-missing checksums.txt
+    ```
+homebrew_casks:
+  - repository:
+      owner: andraspalinkas
+      name: homebrew-tap
+      token: '{{ envOrDefault "HOMEBREW_TAP_TOKEN" "" }}'
+    skip_upload: '{{ if envOrDefault "HOMEBREW_TAP_TOKEN" "" }}false{{ else }}true{{ end }}'
+    directory: Casks
+    homepage: https://secretree.dev
+    description: "Private git: encrypted repositories on any host, with pull requests, reviews and CI intact"
+    license: MIT
+    binaries: [secretree]
+    hooks:
+      post:
+        install: |
+          # the git remote helper is the same binary under a second name
+          FileUtils.ln_sf "#{HOMEBREW_PREFIX}/bin/secretree", "#{HOMEBREW_PREFIX}/bin/git-remote-secretree"
+        uninstall: |
+          FileUtils.rm_f "#{HOMEBREW_PREFIX}/bin/git-remote-secretree"
+    commit_author:
+      name: secretree release bot
+      email: noreply@secretree.dev

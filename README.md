@@ -43,12 +43,14 @@ Website and documentation: [secretree.dev](https://secretree.dev) (source on [Gi
 ## Try everything in five minutes
 
 ```bash
-scripts/tour.sh        # builds the binary, walks two "devices" through every feature on a local vault,
-                       # leaves the local UI running at http://127.0.0.1:7391; scripts/tour.sh --clean removes it
+secretree demo          # two "devices", a vault, a pull request, an AI reviewer, CI, merge, deploy,
+                        # share, backup, restore, a tamper test; leaves the UI at http://127.0.0.1:7391
+secretree demo --clean  # removes it
 ```
 
-It uses a file key store under the tour directory, so your real Keychain
-and no remote host are touched.
+The demo uses a file key store under a temporary directory, so your real
+key store and no remote host are touched. From a checkout, `scripts/tour.sh`
+runs the same walkthrough against a fresh build.
 
 ## Quick start
 

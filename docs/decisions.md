@@ -290,3 +290,19 @@ from anywhere.
 `secretree doctor` checks git, the helper, the key store, the repository
 configuration, the vault and chain, the recovery kit, the restore proof,
 policy, pipeline and the UI, and prints the fix next to each failure.
+
+## 0035 — Releases are signed keylessly and carry an SBOM — accepted (2026-09-18)
+
+`checksums.txt` is signed with cosign in keyless mode from the release
+workflow (certificate bound to the repository's workflow identity), and
+every archive gets an SPDX SBOM from syft. A Homebrew cask is generated on
+every release and pushed to `andraspalinkas/homebrew-tap` when the
+`HOMEBREW_TAP_TOKEN` secret exists; without it the cask is only attached
+to the release. macOS notarization needs an Apple Developer account and
+is not done yet.
+
+## 0036 — The walkthrough ships inside the binary — accepted (2026-09-18)
+
+`secretree demo` runs the embedded tour script with the running binary,
+so a downloaded release can show the whole workflow without a Go
+toolchain or a checkout.

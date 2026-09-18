@@ -25,6 +25,7 @@ commands:
   restore   --vault <url|dir> --to <dir> [--repo-id <id>] [--generation N] [--from-recovery-kit <file>] [--no-state]
   status
   doctor                                     # every check a support request starts with, with the fix
+  demo      [--dir <dir>] [--clean]          # the whole workflow on a throw-away vault, UI at the end
   clone     <vault-url> [dir] [--repo-id <id>] [--from-recovery-kit <file>]
   install-helper [--dir <bindir>]     # makes "git clone secretree::<vault-url>" work
   schedule  --every <duration> | --daily HH:MM | --remove | --show
@@ -137,6 +138,12 @@ func main() {
 		err = a.Status(*dir)
 	case "doctor":
 		err = a.Doctor(*dir)
+	case "demo":
+		fs := flag.NewFlagSet("demo", flag.ExitOnError)
+		clean := fs.Bool("clean", false, "remove the demo directory and stop its UI")
+		where := fs.String("dir", "", "where to build the demo (default: a temporary directory)")
+		must(fs.Parse(rest))
+		err = a.Demo(*where, *clean)
 	case "clone":
 		fs := flag.NewFlagSet("clone", flag.ExitOnError)
 		o := app.CloneOptions{}
