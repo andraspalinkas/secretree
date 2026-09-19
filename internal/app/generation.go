@@ -56,7 +56,46 @@ func (a *App) loadVault(r *repo) (*vaultState, error) {
 	if err != nil {
 		return nil, fmt.Errorf("existing chain failed verification, refusing to append: %w", err)
 	}
-	return &vaultState{Branch: branch, Meta: meta, Signers: signers, Recipients: recipients, Chain: chain, Reader: reader}, nil
+	if err := checkRollback(r, chain); err != nil {
+		return nil, err
+	}
+	vs := &vaultState{Branch: branch, Meta: meta, Signers: signers, Recipients: recipients, Chain: chain, Reader: reader}
+	// remember the tip so a later rollback is noticed even by read-only commands
+	if last := chain.Last(); last != nil {
+		if st, err := config.LoadStatus(r.Paths); err == nil && (last.Num > st.LastGeneration || (last.Num == st.LastGeneration && st.LastManifestHash == "")) {
+			st.LastGeneration, st.LastManifestHash = last.Num, last.ManifestCipherHash
+			_ = config.SaveStatus(r.Paths, st)
+		}
+	}
+	return vs, nil
+}
+
+// ErrRolledBack is returned when the vault on the host no longer contains
+// a generation this device knows it wrote or saw: the host (or someone
+// with its credentials) removed or replaced history.
+var ErrRolledBack = errors.New("vault rolled back")
+
+// checkRollback compares the chain with what this device last recorded.
+func checkRollback(r *repo, chain *vault.Chain) error {
+	st, err := config.LoadStatus(r.Paths)
+	if err != nil || st.LastGeneration == 0 || st.LastManifestHash == "" {
+		return nil
+	}
+	if r.acceptRollback {
+		return nil
+	}
+	g := chain.Get(st.LastGeneration)
+	switch {
+	case g == nil:
+		last := 0
+		if chain.Last() != nil {
+			last = chain.Last().Num
+		}
+		return fmt.Errorf("%w: this device recorded generation %06d on the host, the host now ends at %06d. History was deleted or rewritten on the remote. Nothing is lost locally; run `secretree repair` from a device that holds the data to rebuild the chain, or `secretree verify` to inspect", ErrRolledBack, st.LastGeneration, last)
+	case g.ManifestCipherHash != st.LastManifestHash:
+		return fmt.Errorf("%w: generation %06d on the host is not the one this device recorded (manifest hash differs). Someone replaced history on the remote. Run `secretree verify`, then `secretree repair` from a device that holds the data", ErrRolledBack, st.LastGeneration)
+	}
+	return nil
 }
 
 // loadVaultLocal reads the vault from the existing cache without fetching;
@@ -260,6 +299,7 @@ func (a *App) writeGeneration(r *repo, vs *vaultState, status *config.Status, o 
 	}
 	now := time.Now().UTC()
 	status.LastGeneration = n
+	status.LastManifestHash = crypt.SHA256Bytes(cipher)
 	status.LastBackup = &now
 	status.Generations = n
 	status.ChainBytes = chain.Bytes() + total

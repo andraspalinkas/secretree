@@ -339,3 +339,7 @@ func TestTamperDetection(t *testing.T) {
 		t.Fatal("rollback should fail to produce generation 2")
 	}
 }
+
+func gitxRunEnv(dir string, env []string, args ...string) (string, error) {
+	return gitxRunEnvImpl(dir, env, args...)
+}

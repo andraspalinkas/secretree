@@ -120,9 +120,11 @@ func (a *App) openPR(dir string) (*prContext, error) {
 			return nil, fmt.Errorf("fetch %s: %w", c.remote, err)
 		}
 	}
-	if err := c.store.Sync(c.remote); err != nil {
+	removed, err := c.store.Sync(c.remote)
+	if err != nil {
 		return nil, err
 	}
+	a.reportRemovals(removed)
 	return c, c.reload(a)
 }
 
@@ -170,7 +172,8 @@ func (c *prContext) append(e *collab.Event) error {
 	if err := c.store.Append(e); err != nil {
 		return err
 	}
-	return c.store.Sync(c.remote)
+	_, err := c.store.Sync(c.remote)
+	return err
 }
 
 // PROpenOptions configures PROpen.
@@ -718,4 +721,13 @@ func (a *App) PRDiff(dir, ref string, stat bool) error {
 	}
 	fmt.Fprint(a.Out, out)
 	return nil
+}
+
+// reportRemovals tells the user about event files a remote writer dropped
+// and this client restored. Loud on purpose: it is either a mistake or an
+// attempt to make a review disappear.
+func (a *App) reportRemovals(rs []collab.Removal) {
+	for _, r := range rs {
+		a.logf("WARNING: %s was removed upstream by %s (%s); restored from local objects", r.Path, r.Author, r.Commit)
+	}
 }

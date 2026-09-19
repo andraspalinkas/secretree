@@ -397,22 +397,35 @@ func NextNumber(prs []PullRequest) int {
 // never collide.
 func NewPRID(number int) string { return fmt.Sprintf("%d-%s", number, newID()[:4]) }
 
+// Removal describes an event file that a remote writer dropped and this
+// client put back.
+type Removal struct {
+	Path, Commit, Author string
+}
+
 // Sync merges the local collab ref with origin's and pushes it back.
-// Divergence is resolved by a tree union (event files are unique), so two
-// devices commenting at the same time never conflict. remote is the git
-// remote name; a missing remote ref is fine.
-func (s *Store) Sync(remote string) error {
+// The collaboration history is append-only by construction: event files
+// have unique names and are never edited. Sync enforces that on the
+// receiving side too. Every event this client already knows must be
+// present in whatever arrives from origin; if a remote writer dropped
+// some (a rewritten ref, a deleted file), the union is taken instead of
+// the fast-forward, the missing files come back from the local objects,
+// and the offending commits are reported so people can see who did it.
+// Two devices appending at once therefore never conflict, and one device
+// deleting never sticks.
+func (s *Store) Sync(remote string) ([]Removal, error) {
 	if remote == "" {
-		return nil
+		return nil, nil
 	}
 	if _, err := gitx.Run(s.Dir, "fetch", "--quiet", remote, "+"+Ref+":"+OriginRef); err != nil {
 		var ge *gitx.Error
 		if errors.As(err, &ge) && strings.Contains(ge.Stderr, "couldn't find remote ref") {
 			_, _ = gitx.Run(s.Dir, "update-ref", "-d", OriginRef)
 		} else {
-			return fmt.Errorf("fetch collab: %w", err)
+			return nil, fmt.Errorf("fetch collab: %w", err)
 		}
 	}
+	var removals []Removal
 	for attempt := 0; attempt < 3; attempt++ {
 		local, _ := gitx.Run(s.Dir, "rev-parse", "--verify", "-q", Ref)
 		origin, _ := gitx.Run(s.Dir, "rev-parse", "--verify", "-q", OriginRef)
@@ -422,52 +435,172 @@ func (s *Store) Sync(remote string) error {
 			// nothing remote yet
 		case local == "":
 			if _, err := gitx.Run(s.Dir, "update-ref", Ref, origin); err != nil {
-				return err
+				return nil, err
 			}
 			local = origin
 		case local == origin:
 		default:
-			if _, err := gitx.Run(s.Dir, "merge-base", "--is-ancestor", local, origin); err == nil {
-				if _, err := gitx.Run(s.Dir, "update-ref", Ref, origin, local); err != nil {
-					return err
-				}
-				local = origin
-			} else if _, err := gitx.Run(s.Dir, "merge-base", "--is-ancestor", origin, local); err == nil {
-				// local ahead: push below
-			} else {
-				tree, err := gitx.Run(s.Dir, "merge-tree", "--write-tree", local, origin)
-				if err != nil {
-					return fmt.Errorf("collab merge conflict (should not happen with unique event files): %w", err)
-				}
-				commit, err := gitx.Run(s.Dir, "-c", "user.name=secretree", "-c", "user.email=secretree@localhost",
-					"commit-tree", strings.TrimSpace(tree), "-p", local, "-p", origin, "-m", "collab: merge")
-				if err != nil {
-					return err
-				}
-				if _, err := gitx.Run(s.Dir, "update-ref", Ref, strings.TrimSpace(commit), local); err != nil {
-					return err
-				}
-				local = strings.TrimSpace(commit)
+			missing, err := s.missingIn(local, origin)
+			if err != nil {
+				return nil, err
 			}
+			ahead := false
+			if _, err := gitx.Run(s.Dir, "merge-base", "--is-ancestor", origin, local); err == nil {
+				ahead = true
+			}
+			if len(missing) == 0 && !ahead {
+				if _, err := gitx.Run(s.Dir, "merge-base", "--is-ancestor", local, origin); err == nil {
+					// plain fast-forward, nothing was dropped
+					if _, err := gitx.Run(s.Dir, "update-ref", Ref, origin, local); err != nil {
+						return nil, err
+					}
+					local = origin
+					break
+				}
+			}
+			if ahead && len(missing) == 0 {
+				break // local ahead: push below
+			}
+			// union of both trees: origin's files plus everything origin lacks
+			commit, err := s.unionCommit(local, origin, missing)
+			if err != nil {
+				return nil, err
+			}
+			if len(missing) > 0 {
+				removals = append(removals, s.blame(local, origin, missing)...)
+			}
+			if _, err := gitx.Run(s.Dir, "update-ref", Ref, commit, local); err != nil {
+				return nil, err
+			}
+			local = commit
 		}
 		if local == "" || local == origin {
-			return nil
+			return removals, nil
 		}
 		_, err := gitx.Run(s.Dir, "push", "--quiet", remote, Ref+":"+Ref)
 		if err == nil {
 			_, _ = gitx.Run(s.Dir, "update-ref", OriginRef, local)
-			return nil
+			return removals, nil
 		}
 		var ge *gitx.Error
 		if errors.As(err, &ge) && (strings.Contains(ge.Stderr, "rejected") || strings.Contains(ge.Stderr, "fetch first")) {
 			if _, err := gitx.Run(s.Dir, "fetch", "--quiet", remote, "+"+Ref+":"+OriginRef); err != nil {
-				return err
+				return nil, err
 			}
 			continue
 		}
-		return fmt.Errorf("push collab: %w", err)
+		return nil, fmt.Errorf("push collab: %w", err)
 	}
-	return errors.New("collab push kept being rejected; try again")
+	return removals, errors.New("collab push kept being rejected; try again")
+}
+
+// treePaths lists the files of a commit's tree.
+func (s *Store) treePaths(commit string) (map[string]bool, error) {
+	out, err := gitx.Run(s.Dir, "ls-tree", "-r", "--name-only", commit)
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]bool{}
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		if l != "" {
+			m[l] = true
+		}
+	}
+	return m, nil
+}
+
+// missingIn returns the files of local that origin does not have.
+func (s *Store) missingIn(local, origin string) ([]string, error) {
+	lp, err := s.treePaths(local)
+	if err != nil {
+		return nil, err
+	}
+	op, err := s.treePaths(origin)
+	if err != nil {
+		return nil, err
+	}
+	var missing []string
+	for p := range lp {
+		if !op[p] {
+			missing = append(missing, p)
+		}
+	}
+	sort.Strings(missing)
+	return missing, nil
+}
+
+// unionCommit builds a commit whose tree is origin's tree plus every file
+// only local has, with both as parents.
+func (s *Store) unionCommit(local, origin string, missing []string) (string, error) {
+	tmp, err := os.CreateTemp("", "secretree-index-")
+	if err != nil {
+		return "", err
+	}
+	tmp.Close()
+	os.Remove(tmp.Name())
+	defer os.Remove(tmp.Name())
+	env := []string{"GIT_INDEX_FILE=" + tmp.Name()}
+	if _, err := gitx.RunEnv(s.Dir, env, nil, "read-tree", origin); err != nil {
+		return "", err
+	}
+	// files local has that origin lacks, including ones added concurrently
+	lp, err := s.treePaths(local)
+	if err != nil {
+		return "", err
+	}
+	op, err := s.treePaths(origin)
+	if err != nil {
+		return "", err
+	}
+	for p := range lp {
+		if op[p] {
+			continue
+		}
+		blob, err := gitx.Run(s.Dir, "rev-parse", local+":"+p)
+		if err != nil {
+			return "", err
+		}
+		if _, err := gitx.RunEnv(s.Dir, env, nil, "update-index", "--add", "--cacheinfo", "100644,"+strings.TrimSpace(blob)+","+p); err != nil {
+			return "", err
+		}
+	}
+	tree, err := gitx.RunEnv(s.Dir, env, nil, "write-tree")
+	if err != nil {
+		return "", err
+	}
+	msg := "collab: merge"
+	if len(missing) > 0 {
+		msg = fmt.Sprintf("collab: restore %d event file(s) dropped upstream", len(missing))
+	}
+	commit, err := gitx.Run(s.Dir, "-c", "user.name=secretree", "-c", "user.email=secretree@localhost",
+		"commit-tree", strings.TrimSpace(tree), "-p", local, "-p", origin, "-m", msg)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(commit), nil
+}
+
+// blame finds, for each missing file, the origin-side commit that dropped it.
+func (s *Store) blame(local, origin string, missing []string) []Removal {
+	var out []Removal
+	for _, p := range missing {
+		r := Removal{Path: p}
+		base, _ := gitx.Run(s.Dir, "merge-base", local, origin)
+		rng := origin
+		if b := strings.TrimSpace(base); b != "" {
+			rng = b + ".." + origin
+		}
+		if log, err := gitx.Run(s.Dir, "log", "--diff-filter=D", "--format=%h%x09%an", "-1", rng, "--", p); err == nil {
+			if f := strings.SplitN(strings.TrimSpace(log), "\t", 2); len(f) == 2 {
+				r.Commit, r.Author = f[0], f[1]
+			}
+		}
+		if r.Commit == "" {
+			r.Commit, r.Author = "rewritten history", "unknown"
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // Policy is .secretree/policy.json at the base branch.

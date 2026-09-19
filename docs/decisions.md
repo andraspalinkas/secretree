@@ -333,3 +333,24 @@ page whose unread badge is computed in the browser from a timestamp in
 localStorage; the server keeps no per-viewer state. `kit --html` writes a
 printable recovery kit with QR codes that also works as
 `--from-recovery-kit` input.
+
+## 0040 — Collaboration history is append-only on the receiving side too — accepted (2026-09-19)
+
+Event files are unique and never edited, so any sync can check that
+everything it already knows is still present upstream. When a remote
+writer dropped files (a rewritten ref, a "cleanup"), the client takes
+the union instead of fast-forwarding, restores the files from its own
+objects, pushes the union back, and reports the deleting commit and its
+author. A deletion therefore never sticks for anyone who had synced
+before; it only announces who tried.
+
+## 0041 — Vault rollback is refused, `repair` rebuilds — accepted (2026-09-19)
+
+Every device records the number and manifest hash of the newest
+generation it wrote or saw. When the host's chain no longer contains
+it (shorter chain, or a different manifest at that number), every
+command refuses to continue with a message naming the gap, instead of
+silently appending on top of rewritten history. `secretree repair`
+accepts the remaining verified chain and writes a new full generation
+from the local mirror (every ref, collaboration included) or work tree,
+then runs the restore proof. Other members' next sync adopts it.

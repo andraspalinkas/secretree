@@ -52,6 +52,8 @@ type repo struct {
 
 	identity *age.X25519Identity
 	signer   ssh.Signer
+
+	acceptRollback bool // repair: proceed although the host lost generations
 }
 
 func locateRepo(dir string) (work, gitDir string, err error) {

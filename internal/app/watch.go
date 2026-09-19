@@ -91,9 +91,11 @@ func (a *App) watchPass(r *repo, o WatchOptions, seen map[string]bool) (map[stri
 		}
 	}
 	store := a.collabStore(r, vs)
-	if err := store.Sync(remote); err != nil {
+	removed, err := store.Sync(remote)
+	if err != nil {
 		return seen, err
 	}
+	a.reportRemovals(removed)
 	events, _, err := store.Events()
 	if err != nil {
 		return seen, err

@@ -25,6 +25,7 @@ commands:
   restore   --vault <url|dir> --to <dir> [--repo-id <id>] [--generation N] [--from-recovery-kit <file>] [--no-state]
   status
   doctor                                     # every check a support request starts with, with the fix
+  repair                                     # after the host lost or rewrote generations: rebuild the chain from local data
   demo      [--dir <dir>] [--clean]          # the whole workflow on a throw-away vault, UI at the end
   clone     <vault-url> [dir] [--repo-id <id>] [--from-recovery-kit <file>]
   install-helper [--dir <bindir>]     # makes "git clone secretree::<vault-url>" work
@@ -149,6 +150,8 @@ func main() {
 		err = a.Status(*dir)
 	case "doctor":
 		err = a.Doctor(*dir)
+	case "repair":
+		err = a.Repair(*dir)
 	case "demo":
 		fs := flag.NewFlagSet("demo", flag.ExitOnError)
 		clean := fs.Bool("clean", false, "remove the demo directory and stop its UI")
