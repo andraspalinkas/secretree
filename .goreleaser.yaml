@@ -42,11 +42,12 @@ release:
     shasum -a 256 -c --ignore-missing checksums.txt
     ```
 homebrew_casks:
+    # the cask is written to dist/homebrew/Casks and published by a
+    # separate, non-fatal workflow step (see .github/workflows/ci.yml)
   - repository:
       owner: andraspalinkas
       name: homebrew-tap
-      token: '{{ envOrDefault "HOMEBREW_TAP_TOKEN" "" }}'
-    skip_upload: '{{ if envOrDefault "HOMEBREW_TAP_TOKEN" "" }}false{{ else }}true{{ end }}'
+    skip_upload: "true"
     directory: Casks
     homepage: https://secretree.dev
     description: "Private git: encrypted repositories on any host, with pull requests, reviews and CI intact"
