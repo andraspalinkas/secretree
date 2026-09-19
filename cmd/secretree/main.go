@@ -17,9 +17,9 @@ const usage = `secretree — private git: encrypted repositories on any host, wi
 usage: secretree [-C <repo dir>] [-v] <command> [options]
 
 commands:
-  init      --vault <url|dir|github:owner/name|gitlab:owner/name> [--kit-out <file>] [--push] [--label <name>]
+  init      --vault <url|dir|github:owner/name|gitlab:owner/name> [--kit-out <file>] [--push] [--name <device>] [--label <repo>]
             [--from-recovery-kit <file>] [--repo-id <id>] [--no-remote] [--force]
-  kit       --print <file> | --confirm       # the recovery kit is on paper (status warns until then)
+  kit       --html [<file>] | --print <file> | --confirm   # printable kit with QR codes; confirm once on paper
   backup    [--full]
   verify    [--generation N] [--quick] [--all]
   restore   --vault <url|dir> --to <dir> [--repo-id <id>] [--generation N] [--from-recovery-kit <file>] [--no-state]
@@ -29,8 +29,9 @@ commands:
   clone     <vault-url> [dir] [--repo-id <id>] [--from-recovery-kit <file>]
   install-helper [--dir <bindir>]     # makes "git clone secretree::<vault-url>" work
   schedule  --every <duration> | --daily HH:MM | --remove | --show
-  join      --vault <url|dir> [--name <device>] [--out <file>]   # new device: keys + join request
-  member    list | add --request <file> [--role agent] | add --recipient age1... [--signer "..."] --name <n> | remove --name <n> | request
+  join      --vault <url|dir> [--name <device>] [--no-push --out <file>]   # new device: keys + request via the vault
+  member    list | pending | approve <name> [--role agent] | deny <name> | add --request <file> [--role agent]
+            add --recipient age1... [--signer "..."] --name <n> | remove --name <n> | request
   share     <path> [--ref <ref>] | --diff <a..b> [--expires 7d] [--note <why>] [--out <file.html>]
   ledger    [add --kind export --subject <what> [--note <why>]]   # every deliberate disclosure, signed and chained
   ui        [--listen 127.0.0.1:7391] [--open] | --install | --uninstall   # local code browser + pull requests
@@ -89,14 +90,24 @@ func main() {
 		fs.BoolVar(&o.Push, "push", false, "push every branch and tag through the helper right away")
 		fs.BoolVar(&o.NoRemote, "no-remote", false, "do not add a git remote or install the helper (backup-only use)")
 		fs.StringVar(&o.Remote, "remote", "origin", "name of the git remote to add")
+		fs.StringVar(&o.Name, "name", "", "this device's member name, shown on reviews and comments (default: hostname)")
 		must(fs.Parse(rest))
 		err = a.Init(o)
 	case "kit":
 		fs := flag.NewFlagSet("kit", flag.ExitOnError)
 		pr := fs.String("print", "", "send this recovery kit file to the default printer (or open it)")
 		confirm := fs.Bool("confirm", false, "record that the kit is on paper")
+		htmlOut := fs.String("html", "", "write a printable kit with QR codes to this file (\"-\" for the default name)")
 		must(fs.Parse(rest))
-		err = a.Kit(*dir, *pr, *confirm)
+		switch {
+		case *htmlOut != "":
+			if *htmlOut == "-" {
+				*htmlOut = ""
+			}
+			err = a.KitHTML(*dir, *htmlOut)
+		default:
+			err = a.Kit(*dir, *pr, *confirm)
+		}
 	case "watch":
 		fs := flag.NewFlagSet("watch", flag.ExitOnError)
 		o := app.WatchOptions{Dir: *dir}
@@ -185,7 +196,8 @@ func main() {
 		o := app.JoinOptions{}
 		fs.StringVar(&o.VaultURL, "vault", "", "vault git URL or directory")
 		fs.StringVar(&o.Name, "name", "", "this device's name (shown to members)")
-		fs.StringVar(&o.Out, "out", "", "write the join request to a file")
+		fs.StringVar(&o.Out, "out", "", "write the join request to a file (with --no-push)")
+		fs.BoolVar(&o.NoPush, "no-push", false, "do not send the request through the vault; produce a file to send by hand")
 		pos := parseAll(fs, rest)
 		if o.VaultURL == "" && len(pos) == 1 {
 			o.VaultURL = pos[0]
@@ -204,7 +216,11 @@ func main() {
 		fs.StringVar(&o.Signer, "signer", "", "ssh public key line")
 		fs.StringVar(&o.Name, "name", "", "member name")
 		fs.StringVar(&o.Role, "role", "", "\"agent\" for AI or bot members: may comment and review, approvals do not count, cannot merge")
-		must(fs.Parse(subrest))
+		if (sub == "approve" || sub == "deny") && len(subrest) > 0 && !strings.HasPrefix(subrest[0], "-") {
+			must(fs.Parse(subrest[1:]))
+		} else {
+			must(fs.Parse(subrest))
+		}
 		switch sub {
 		case "list":
 			err = a.MemberList(*dir)
@@ -214,8 +230,22 @@ func main() {
 			err = a.MemberRemove(o)
 		case "request":
 			err = a.MemberRequest(*dir)
+		case "pending":
+			err = a.MemberPending(*dir)
+		case "approve":
+			if len(subrest) == 0 || strings.HasPrefix(subrest[0], "-") {
+				fmt.Fprintln(os.Stderr, "usage: secretree member approve <name|id> [--role agent]")
+				os.Exit(2)
+			}
+			err = a.MemberApprove(*dir, subrest[0], o.Role)
+		case "deny":
+			if len(subrest) == 0 {
+				fmt.Fprintln(os.Stderr, "usage: secretree member deny <name|id>")
+				os.Exit(2)
+			}
+			err = a.MemberDeny(*dir, subrest[0])
 		default:
-			fmt.Fprintln(os.Stderr, "usage: secretree member list|add|remove|request")
+			fmt.Fprintln(os.Stderr, "usage: secretree member list|pending|approve|deny|add|remove|request")
 			os.Exit(2)
 		}
 	case "share":

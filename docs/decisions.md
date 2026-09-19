@@ -306,3 +306,30 @@ is not done yet.
 `secretree demo` runs the embedded tour script with the running binary,
 so a downloaded release can show the whole workflow without a Go
 toolchain or a checkout.
+
+## 0037 — Join requests travel through the vault — accepted (2026-09-19)
+
+A joining device encrypts its public keys to the current recipients (they
+are in the plaintext `vault.json`) and pushes `requests/<id>.json.age`;
+members list them with `member pending` and `member approve` adds the
+member and removes the file. No request file needs to be sent by hand.
+The host sees one more random file name. `join --no-push` keeps the old
+file-based path for hosts where the joiner has no push access.
+
+## 0038 — Devices have member names; the creator is a member too — accepted (2026-09-19)
+
+Reviews, comments, checks and ledger entries carry the device's member
+name from `vault.json`, resolved by signer fingerprint at read time, not
+the repository label (which is the same for every clone). `init --name`
+sets the creator's name (default: hostname) and records it as the first
+member.
+
+## 0039 — The UI has its own design and shows activity — accepted (2026-09-19)
+
+The local UI uses the website's palette (paper and ink, a teal accent,
+gold for ciphertext), tabs with counts, cards, a timeline for
+conversations, empty states that say what to do next, and an Activity
+page whose unread badge is computed in the browser from a timestamp in
+localStorage; the server keeps no per-viewer state. `kit --html` writes a
+printable recovery kit with QR codes that also works as
+`--from-recovery-kit` input.

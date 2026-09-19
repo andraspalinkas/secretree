@@ -87,7 +87,7 @@ func TestWatchSummaries(t *testing.T) {
 	src := newSource(t, home)
 	vaultDir := filepath.Join(home, "vault.git")
 	a, out := newApp()
-	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: filepath.Join(home, "kit.txt"), Push: true, Label: "alice"}); err != nil {
+	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: filepath.Join(home, "kit.txt"), Push: true, Label: "alice", Name: "alice"}); err != nil {
 		t.Fatalf("init: %v\n%s", err, out)
 	}
 	if err := a.PROpen(PROpenOptions{Dir: src, Title: "Feature", Head: "feature", Base: "main"}); err != nil {

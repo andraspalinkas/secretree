@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/andraspalinkas/secretree/internal/config"
 	"github.com/andraspalinkas/secretree/internal/gitx"
@@ -71,6 +70,8 @@ func (a *App) UI(o UIOptions) error {
 	mux.HandleFunc("GET /search", s.search)
 	mux.HandleFunc("GET /ledger", s.ledger)
 	mux.HandleFunc("GET /vault", s.vault)
+	mux.HandleFunc("GET /activity", s.activity)
+	mux.HandleFunc("GET /activity.json", s.activityJSON)
 	ln, err := net.Listen("tcp", o.Listen)
 	if err != nil {
 		return err
@@ -92,31 +93,15 @@ func openBrowser(url string) {
 	}
 }
 
+// uiCSP: inline styles and scripts of our own, the data: search icon, and
+// same-origin XHR for the activity badge. Nothing from anywhere else.
+const uiCSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'self'; form-action 'self'"
+
 type uiServer struct {
 	repo, name, work, source string
 	app                      *App
 	csrf                     string
 	paths                    config.Paths
-}
-
-// proofBadge summarises the restore proof for the header.
-func (s *uiServer) proofBadge() (string, bool) {
-	st, err := config.LoadStatus(s.paths)
-	if err != nil || st == nil {
-		return "", false
-	}
-	if st.LastProof == nil {
-		if st.LastGeneration == 0 {
-			return "no backup yet", false
-		}
-		return "restore not proven", false
-	}
-	d := time.Since(*st.LastProof).Round(time.Minute)
-	txt := fmt.Sprintf("proven %s ago · gen %06d", d, st.LastProofGeneration)
-	if d < time.Minute {
-		txt = fmt.Sprintf("proven just now · gen %06d", st.LastProofGeneration)
-	}
-	return txt, st.LastProofGeneration >= st.LastGeneration
 }
 
 // splitRefPath resolves "<ref>/<path>" or "<ref-with-slashes>/-/<path>".
@@ -131,19 +116,18 @@ func (s *uiServer) splitRefPath(rest string) (ref, p string) {
 type crumb struct{ Name, URL string }
 
 type page struct {
-	Repo, Source, Title, Ref, Path, Kind string
-	Proof                                string
-	ProofOK                              bool
-	Crumbs                               []crumb
-	Branches, Tags                       []refLine
-	Entries                              []treeEntry
-	Lines                                []codeLine
-	Commits                              []commitLine
-	Diff                                 template.HTML
-	Query                                string
-	Hits                                 []hit
-	Message                              string
-	Blame                                bool
+	chrome
+	Title, Path    string
+	Crumbs         []crumb
+	Branches, Tags []refLine
+	Entries        []treeEntry
+	Lines          []codeLine
+	Commits        []commitLine
+	Diff           template.HTML
+	Hits           []hit
+	Message        string
+	Blame          bool
+	Readme         template.HTML
 }
 
 type refLine struct{ Name, SHA, Subject, Date string }
@@ -164,10 +148,11 @@ type hit struct {
 }
 
 func (s *uiServer) render(w http.ResponseWriter, p *page) {
-	p.Repo, p.Source = s.name, s.source
-	p.Proof, p.ProofOK = s.proofBadge()
+	c := s.chrome(p.Kind)
+	c.Ref, c.Query = p.Ref, p.Query
+	p.chrome = c
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'")
+	w.Header().Set("Content-Security-Policy", uiCSP)
 	if err := uiTmpl.Execute(w, p); err != nil {
 		http.Error(w, err.Error(), 500)
 	}
@@ -205,7 +190,10 @@ func refSeg(ref string) string {
 }
 
 func (s *uiServer) home(w http.ResponseWriter, r *http.Request) {
-	p := &page{Kind: "home", Title: s.name}
+	p := &page{chrome: chrome{Kind: "home"}, Title: s.name}
+	if out, err := gitx.Run(s.repo, "show", "HEAD:README.md"); err == nil {
+		p.Readme = md(out)
+	}
 	for _, kind := range []string{"refs/heads/", "refs/tags/"} {
 		out, err := gitx.Run(s.repo, "for-each-ref", "--sort=-committerdate", "--format=%(refname:short)%09%(objectname:short)%09%(subject)%09%(committerdate:short)", kind)
 		if err != nil {
@@ -242,7 +230,7 @@ func (s *uiServer) tree(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	p := &page{Kind: "tree", Title: tp, Ref: ref, Path: tp, Crumbs: crumbs("tree", ref, tp)}
+	p := &page{chrome: chrome{Kind: "tree", Ref: ref}, Title: tp, Path: tp, Crumbs: crumbs("tree", ref, tp)}
 	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
 		t, name, ok := strings.Cut(l, "\t")
 		if !ok {
@@ -257,6 +245,13 @@ func (s *uiServer) tree(w http.ResponseWriter, r *http.Request) {
 		}
 		p.Entries = append(p.Entries, e)
 	}
+	for _, e := range p.Entries {
+		if !e.Dir && strings.EqualFold(e.Name, "README.md") {
+			if out, err := gitx.Run(s.repo, "show", ref+":"+path.Join(tp, e.Name)); err == nil {
+				p.Readme = md(out)
+			}
+		}
+	}
 	s.render(w, p)
 }
 
@@ -267,7 +262,7 @@ func (s *uiServer) blob(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	p := &page{Kind: "blob", Title: bp, Ref: ref, Path: bp, Crumbs: crumbs("blob", ref, bp)}
+	p := &page{chrome: chrome{Kind: "blob", Ref: ref}, Title: bp, Path: bp, Crumbs: crumbs("blob", ref, bp)}
 	if strings.IndexByte(out, 0) >= 0 {
 		p.Message = "binary file"
 	} else {
@@ -298,7 +293,7 @@ func (s *uiServer) blame(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	p := &page{Kind: "blob", Blame: true, Title: bp, Ref: ref, Path: bp, Crumbs: crumbs("blob", ref, bp)}
+	p := &page{chrome: chrome{Kind: "blob", Ref: ref}, Blame: true, Title: bp, Path: bp, Crumbs: crumbs("blob", ref, bp)}
 	var cur codeLine
 	h := newHighlighter(bp)
 	for _, l := range strings.Split(out, "\n") {
@@ -323,7 +318,7 @@ func (s *uiServer) commits(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	p := &page{Kind: "commits", Title: "commits on " + ref, Ref: ref}
+	p := &page{chrome: chrome{Kind: "commits", Ref: ref}, Title: "commits on " + ref}
 	p.Commits = parseCommits(out)
 	s.render(w, p)
 }
@@ -347,7 +342,7 @@ func (s *uiServer) commit(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	p := &page{Kind: "commit", Title: "commit " + sha[:min(8, len(sha))], Ref: sha, Diff: renderDiff(out)}
+	p := &page{chrome: chrome{Kind: "commit", Ref: sha}, Title: "commit " + sha[:min(8, len(sha))], Diff: renderDiff(out)}
 	s.render(w, p)
 }
 
@@ -379,7 +374,7 @@ func (s *uiServer) search(w http.ResponseWriter, r *http.Request) {
 	if ref == "" {
 		ref = "HEAD"
 	}
-	p := &page{Kind: "search", Title: "search", Query: q, Ref: ref}
+	p := &page{chrome: chrome{Kind: "search", Query: q, Ref: ref}, Title: "search"}
 	if q != "" {
 		out, err := gitx.Run(s.repo, "grep", "-n", "-I", "--max-count=50", "-e", q, ref, "--")
 		if err == nil {
@@ -444,71 +439,48 @@ func absRel(work, p string) (string, error) {
 	return filepath.ToSlash(rel), nil
 }
 
-// uiCSS is shared by every page.
-const uiCSS = `<style>
-:root{--bg:#ffffff;--bg2:#f6f8fa;--fg:#1f2328;--fg2:#57606a;--line:#d0d7de;--link:#0969da;--head:#24292f;--head-fg:#fff;
---add:#e6ffec;--del:#ffebe9;--hunk:#eef4fb;--hl:#fff8c5;--hl-line:#e0c800;--ok:#1a7f37;--bad:#cf222e;--warn:#9a6700;--purple:#8250df;--agent:#6e40c9;
---kw:#cf222e;--str:#0a3069;--num:#0550ae;--cm:#6e7781}
-@media (prefers-color-scheme: dark){:root{--bg:#0d1117;--bg2:#161b22;--fg:#e6edf3;--fg2:#8d96a0;--line:#30363d;--link:#58a6ff;--head:#010409;--head-fg:#e6edf3;
---add:#12261e;--del:#2d1214;--hunk:#121d2f;--hl:#3a3218;--hl-line:#6b5a1a;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--purple:#a371f7;--agent:#8957e5;
---kw:#ff7b72;--str:#a5d6ff;--num:#79c0ff;--cm:#8b949e}}
-body{font:14px/1.45 -apple-system,system-ui,sans-serif;margin:0;color:var(--fg);background:var(--bg)}
-header{background:var(--head);color:var(--head-fg);padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-header a{color:var(--head-fg);text-decoration:none;font-weight:600}header a.nav{font-weight:400;opacity:.85}header a.nav.here{opacity:1;font-weight:600;text-decoration:underline;text-underline-offset:6px}
-header form{margin-left:auto}header input{padding:4px 8px;border-radius:4px;border:1px solid var(--line);width:240px;background:var(--bg);color:var(--fg)}
-header small{opacity:.7}
-.badge{font-size:12px;padding:2px 9px;border-radius:10px;background:var(--bg2);color:var(--fg);border:1px solid var(--line);white-space:nowrap}
-.badge.ok{border-color:var(--ok);color:var(--ok)}.badge.warn{border-color:var(--warn);color:var(--warn)}
-main{padding:12px 16px;max-width:1200px}
-h3{margin:14px 0 8px}h4{margin:18px 0 8px}
-nav.crumbs a{color:var(--link);text-decoration:none}nav.crumbs{margin-bottom:10px}
-table{border-collapse:collapse;width:100%}td,th{padding:5px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:12px;color:var(--fg2);font-weight:600}
-a{color:var(--link)}
-pre.code{margin:0;border:1px solid var(--line);border-radius:6px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg)}
-pre.code div{display:flex;white-space:pre}
-pre.code div:target{background:var(--hl)}
-pre.code .n{width:52px;text-align:right;padding:0 8px;color:var(--fg2);user-select:none;flex:none}
-pre.code .n a{color:var(--fg2);text-decoration:none}
-pre.code .bl{width:200px;flex:none;color:var(--fg2);padding:0 8px;overflow:hidden;text-overflow:ellipsis}
-pre.code .t{padding:0 8px}
-.kw{color:var(--kw)}.str{color:var(--str)}.num{color:var(--num)}.cm{color:var(--cm);font-style:italic}
-.diff{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--line);border-radius:6px;overflow:auto;background:var(--bg)}
-.diff div{white-space:pre;padding:0 8px}.diff .a{background:var(--add)}.diff .d{background:var(--del)}.diff .k{color:var(--link);background:var(--hunk)}.diff .f{font-weight:600;background:var(--bg2);margin-top:8px}.diff .h{color:var(--fg2)}
-.sha{font-family:ui-monospace,Menlo,monospace;color:var(--fg2)}
-.muted{color:var(--fg2)}
-.md p{margin:0 0 8px}.md p:last-child{margin:0}.md pre{background:var(--bg2);padding:8px;border-radius:5px;overflow:auto;font-size:12px}.md code{background:var(--bg2);padding:1px 4px;border-radius:3px;font-size:12px}.md ul,.md ol{margin:0 0 8px;padding-left:20px}.md blockquote{margin:0 0 8px;padding-left:10px;border-left:3px solid var(--line);color:var(--fg2)}
-.box{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0}
-.cipher{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--fg2)}
-.two{display:flex;gap:12px;flex-wrap:wrap}.two>div{flex:1;min-width:280px}
-</style>
-`
-
-// uiHeader is the bar shared by every page. It needs Repo, Source, Kind,
-// Proof (text) and ProofOK on the page value.
-const uiHeader = `<header><a href="/">{{.Repo}}</a>
-<a href="/" class="nav{{if eq .Kind "home" "tree" "blob" "commits" "commit" "search"}} here{{end}}">code</a>
-<a href="/pulls" class="nav{{if eq .Kind "list" "pr" "new"}} here{{end}}">pull requests</a>
-<a href="/ledger" class="nav{{if eq .Kind "ledger"}} here{{end}}">ledger</a>
-<a href="/vault" class="nav{{if eq .Kind "vault"}} here{{end}}">vault</a>
-<small>{{.Source}}</small>
-{{if .Proof}}<a href="/vault" class="badge {{if .ProofOK}}ok{{else}}warn{{end}}" title="restore proof">{{.Proof}}</a>{{end}}
-<form action="/search"><input name="q" placeholder="search code" value="{{.Query}}"><input type="hidden" name="ref" value="{{if .Ref}}{{.Ref}}{{else}}HEAD{{end}}"></form></header>`
-
 var uiTmpl = template.Must(template.New("ui").Parse(`<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Repo}}: {{.Title}}</title>
 ` + uiCSS + uiHeader + `
 <main>
-{{if .Crumbs}}<nav class="crumbs">{{range $i,$c := .Crumbs}}{{if $i}} / {{end}}<a href="{{$c.URL}}">{{$c.Name}}</a>{{end}}
-{{if eq .Kind "blob"}} &nbsp;<span class="muted">{{if .Blame}}<a href="/blob/{{.Ref}}/{{.Path}}">normal</a>{{else}}<a href="/blame/{{.Ref}}/{{.Path}}">blame</a>{{end}} · <a href="/raw/{{.Ref}}/{{.Path}}">raw</a> · <a href="/commits/{{.Ref}}">history</a></span>{{end}}</nav>{{end}}
+{{if .Crumbs}}<nav class="crumbs">{{range $i,$c := .Crumbs}}{{if $i}}<span class="sep">/</span>{{end}}<a href="{{$c.URL}}">{{$c.Name}}</a>{{end}}
+{{if eq .Kind "blob"}}<span class="tools">{{if .Blame}}<a href="/blob/{{.Ref}}/{{.Path}}">Normal</a>{{else}}<a href="/blame/{{.Ref}}/{{.Path}}">Blame</a>{{end}}<a href="/raw/{{.Ref}}/{{.Path}}">Raw</a><a href="/commits/{{.Ref}}">History</a></span>{{end}}</nav>{{end}}
+
 {{if eq .Kind "home"}}
-<h3>Branches</h3><table>{{range .Branches}}<tr><td><a href="/tree/{{.Name}}">{{.Name}}</a></td><td><a class="sha" href="/commit/{{.SHA}}">{{.SHA}}</a></td><td>{{.Subject}}</td><td class="muted">{{.Date}}</td><td><a href="/commits/{{.Name}}">commits</a></td></tr>{{end}}</table>
-{{if .Tags}}<h3>Tags</h3><table>{{range .Tags}}<tr><td><a href="/tree/{{.Name}}">{{.Name}}</a></td><td><a class="sha" href="/commit/{{.SHA}}">{{.SHA}}</a></td><td>{{.Subject}}</td><td class="muted">{{.Date}}</td></tr>{{end}}</table>{{end}}
+<div class="grid">
+<div>
+<div class="card"><div class="hd"><b>Branches</b><span class="count">{{len .Branches}}</span></div>
+{{range .Branches}}<div class="row"><div class="grow"><a class="title" href="/tree/{{.Name}}">{{.Name}}</a><div class="small muted">{{.Subject}}</div></div><a class="sha" href="/commit/{{.SHA}}">{{.SHA}}</a><span class="meta">{{.Date}}</span><a class="small" href="/commits/{{.Name}}">history</a></div>{{else}}<div class="empty"><b>No branches yet</b>Push a branch through the secretree:: remote and it shows up here.</div>{{end}}</div>
+{{if .Tags}}<div class="card"><div class="hd"><b>Tags</b><span class="count">{{len .Tags}}</span></div>
+{{range .Tags}}<div class="row"><div class="grow"><a class="title" href="/tree/{{.Name}}">{{.Name}}</a><div class="small muted">{{.Subject}}</div></div><a class="sha" href="/commit/{{.SHA}}">{{.SHA}}</a><span class="meta">{{.Date}}</span></div>{{end}}</div>{{end}}
+</div>
+<div class="side">{{if .Readme}}<div class="card"><div class="hd"><b>README</b></div><div class="bd md">{{.Readme}}</div></div>{{else}}<div class="card"><div class="bd muted small">Add a README.md at the root of the default branch and it is shown here.</div></div>{{end}}</div>
+</div>
 {{end}}
-{{if eq .Kind "tree"}}<table>{{range .Entries}}<tr><td>{{if .Dir}}📁{{else}}📄{{end}} <a href="{{.URL}}">{{.Name}}</a></td></tr>{{end}}</table>{{end}}
-{{if eq .Kind "blob"}}{{if .Message}}<p class="muted">{{.Message}}</p>{{else}}<pre class="code">{{range .Lines}}<div id="L{{.N}}"><span class="n"><a href="#L{{.N}}">{{.N}}</a></span>{{if $.Blame}}<span class="bl">{{.SHA}} {{.Author}}</span>{{end}}<span class="t">{{.Text}}</span></div>{{end}}</pre>{{end}}{{end}}
-{{if eq .Kind "commits"}}<h3>{{.Title}}</h3><table>{{range .Commits}}<tr><td><a class="sha" href="/commit/{{.SHA}}">{{.Short}}</a></td><td>{{.Subject}}</td><td class="muted">{{.Author}}</td><td class="muted">{{.Date}}</td></tr>{{end}}</table>{{end}}
-{{if eq .Kind "commit"}}<div class="diff">{{.Diff}}</div>{{end}}
-{{if eq .Kind "search"}}<h3>{{if .Query}}results for “{{.Query}}” in {{.Ref}}{{else}}search{{end}}</h3><table>{{range .Hits}}<tr><td><a href="{{.URL}}">{{.Path}}:{{.Line}}</a></td><td><code>{{.Text}}</code></td></tr>{{end}}</table>{{end}}
+
+{{if eq .Kind "tree"}}
+<div class="card tree">{{range .Entries}}<div class="row"><div class="grow">{{if .Dir}}` + icoTree + `<a class="dir" href="{{.URL}}">{{.Name}}</a>{{else}}` + icoFile + `<a href="{{.URL}}">{{.Name}}</a>{{end}}</div></div>{{else}}<div class="empty"><b>Empty directory</b></div>{{end}}</div>
+{{if .Readme}}<div class="card" style="margin-top:14px"><div class="hd"><b>README</b></div><div class="bd md">{{.Readme}}</div></div>{{end}}
+{{end}}
+
+{{if eq .Kind "blob"}}
+<div class="card">{{if .Message}}<div class="empty"><b>{{.Message}}</b></div>{{else}}<pre class="code">{{range .Lines}}<div id="L{{.N}}"><span class="n"><a href="#L{{.N}}">{{.N}}</a></span>{{if $.Blame}}<span class="bl">{{.SHA}} {{.Author}}</span>{{end}}<span class="t">{{.Text}}</span></div>{{end}}</pre>{{end}}</div>
+{{end}}
+
+{{if eq .Kind "commits"}}
+<h1>History of {{.Ref}}</h1>
+<div class="card">{{range .Commits}}<div class="row"><a class="sha" href="/commit/{{.SHA}}">{{.Short}}</a><div class="grow"><a href="/commit/{{.SHA}}">{{.Subject}}</a></div><span class="meta">{{.Author}}</span><span class="meta">{{.Date}}</span></div>{{else}}<div class="empty"><b>No commits</b></div>{{end}}</div>
+{{end}}
+
+{{if eq .Kind "commit"}}
+<h1>{{.Title}}</h1>
+<div class="card"><div class="diff">{{.Diff}}</div></div>
+{{end}}
+
+{{if eq .Kind "search"}}
+<h1>{{if .Query}}Results for “{{.Query}}” in {{.Ref}}{{else}}Search{{end}}</h1>
+<div class="card">{{range .Hits}}<div class="row"><a href="{{.URL}}" class="mono small" style="flex:none;min-width:220px">{{.Path}}:{{.Line}}</a><div class="grow mono small" style="white-space:pre;overflow:hidden;text-overflow:ellipsis">{{.Text}}</div></div>{{else}}<div class="empty"><b>{{if .Query}}No matches{{else}}Type to search{{end}}</b>Search runs over every file of the chosen ref, across all branches of the mirror.</div>{{end}}</div>
+{{end}}
 </main>
 <script>if(location.hash&&self===top){var e=document.getElementById(location.hash.slice(1));e&&e.scrollIntoView({block:"center"})}</script>
 `))

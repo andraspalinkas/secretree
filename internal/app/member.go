@@ -24,6 +24,7 @@ type JoinOptions struct {
 	VaultURL string
 	Name     string // device/person name shown to admins
 	Out      string // write the join request here ("" = stdout)
+	NoPush   bool   // do not push the request into the vault; print/write it instead
 }
 
 // Join prepares a new device: fresh keys for the vault in the key store,
@@ -76,9 +77,24 @@ func (a *App) Join(o JoinOptions) error {
 	if name == "" {
 		name, _ = os.Hostname()
 	}
-	req, err := joinRequest(kb, name)
+	req, err := joinRequestText(kb, name)
 	if err != nil {
 		return err
+	}
+	if !o.NoPush {
+		// the request travels through the vault: encrypted to the current
+		// members, pushed as requests/<id>.json.age
+		cache := filepath.Join(tmp, "cache")
+		if branch, _, err := syncCache(url, cache, ""); err == nil {
+			if id, err := a.pushJoinRequest(cache, branch, kb, &m, name); err == nil {
+				a.logf("keys stored in %s.", store.Describe())
+				a.logf("join request %s pushed to the vault; a member approves it with:\n  secretree member approve %s", id[:8], name)
+				a.logf("then clone with: secretree clone %s", o.VaultURL)
+				return nil
+			} else {
+				a.logf("could not push the request to the vault (%v); falling back to a file", err)
+			}
+		}
 	}
 	if o.Out != "" {
 		if err := os.WriteFile(o.Out, []byte(req), 0o644); err != nil {
@@ -93,7 +109,7 @@ func (a *App) Join(o JoinOptions) error {
 	return nil
 }
 
-func joinRequest(kb *keys.Bundle, name string) (string, error) {
+func joinRequestText(kb *keys.Bundle, name string) (string, error) {
 	rec, err := kb.Recipient()
 	if err != nil {
 		return "", err
@@ -112,7 +128,7 @@ func (a *App) MemberRequest(dir string) error {
 	if err != nil {
 		return err
 	}
-	req, err := joinRequest(r.Keys, r.Cfg.Label)
+	req, err := joinRequestText(r.Keys, r.Cfg.Label)
 	if err != nil {
 		return err
 	}

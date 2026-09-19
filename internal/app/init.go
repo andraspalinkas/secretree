@@ -30,6 +30,7 @@ type InitOptions struct {
 	NoRemote bool   // do not add the "origin" remote / install the helper
 	Push     bool   // push every branch and tag through the helper right away
 	Remote   string // remote name (default origin)
+	Name     string // this device's member name (default: hostname)
 }
 
 // Init prepares a repository for backups: keys in the key store, vault
@@ -82,7 +83,7 @@ func (a *App) Init(o InitOptions) error {
 		if err := store.Put(kb); err != nil {
 			return err
 		}
-		if meta, err = a.bootstrapVault(reader, kb, branch, url); err != nil {
+		if meta, err = a.bootstrapVault(reader, kb, branch, url, o.Name); err != nil {
 			return err
 		}
 		if a.hostProtect != nil {
@@ -281,22 +282,26 @@ func (a *App) createHostRepo(url *string) (string, error) {
 
 // bootstrapVault writes README, vault.json and its signature as the first
 // commit of an empty vault.
-func (a *App) bootstrapVault(reader *vault.Reader, kb *keys.Bundle, branch, url string) (*vault.Meta, error) {
+func (a *App) bootstrapVault(reader *vault.Reader, kb *keys.Bundle, branch, url, name string) (*vault.Meta, error) {
 	recipient, err := kb.Recipient()
 	if err != nil {
 		return nil, err
 	}
-	host, _ := os.Hostname()
-	signerLine, err := kb.AllowedSignersLine("vault-" + kb.VaultID + " " + host)
+	if name == "" {
+		name, _ = os.Hostname()
+	}
+	signerLine, err := kb.AllowedSignersLine(name)
 	if err != nil {
 		return nil, err
 	}
+	fp, _ := kb.Fingerprint()
 	meta := &vault.Meta{
 		Format:         vault.FormatVault,
 		VaultID:        kb.VaultID,
 		Created:        time.Now().UTC().Truncate(time.Second),
 		Recipients:     []string{recipient},
 		AllowedSigners: []string{signerLine},
+		Members:        []vault.Member{{Name: name, Recipient: recipient, SignerFingerprint: fp, Added: time.Now().UTC().Truncate(time.Second)}},
 	}
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {

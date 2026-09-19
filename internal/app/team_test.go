@@ -39,7 +39,7 @@ func TestJoinAndMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := a.Join(JoinOptions{VaultURL: vaultDir, Name: "laptop-b", Out: req}); err != nil {
+	if err := a.Join(JoinOptions{VaultURL: vaultDir, Name: "laptop-b", Out: req, NoPush: true}); err != nil {
 		t.Fatalf("join: %v\n%s", err, out)
 	}
 	// before approval B cannot clone

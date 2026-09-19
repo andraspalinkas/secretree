@@ -32,13 +32,41 @@ func secretreeRemote(work string) string {
 	return ""
 }
 
+// memberNames maps signer fingerprints to member names.
+func memberNames(vs *vaultState) map[string]string {
+	names := map[string]string{}
+	for _, m := range vs.Meta.Members {
+		if m.SignerFingerprint != "" {
+			names[m.SignerFingerprint] = m.Name
+		}
+	}
+	return names
+}
+
+// nameEvents fills ActorName from the roster; events written before a
+// device had a member entry keep whatever name they carry.
+func nameEvents(vs *vaultState, events []collab.Event) {
+	names := memberNames(vs)
+	for i := range events {
+		if n := names[events[i].Actor]; n != "" {
+			events[i].ActorName = n
+		}
+	}
+}
+
+// deviceName is this device's member name, or the repository label when
+// it has no roster entry (vaults created before names were recorded).
+func (r *repo) deviceName(vs *vaultState) string {
+	fp, _ := r.Keys.Fingerprint()
+	if n := memberNames(vs)[fp]; n != "" {
+		return n
+	}
+	return r.Cfg.Label
+}
+
 // collabStore wires the collab ref to this device's signing key and the
 // vault's signer roster.
 func (a *App) collabStore(r *repo, vs *vaultState) *collab.Store {
-	names := map[string]string{}
-	for _, m := range vs.Meta.Members {
-		names[m.SignerFingerprint] = m.Name
-	}
 	return &collab.Store{
 		Dir:  r.Work,
 		Sign: func(data []byte) ([]byte, error) { return crypt.Sign(data, r.signer) },
@@ -106,6 +134,7 @@ func (c *prContext) reload(a *App) error {
 	for _, b := range bad {
 		a.debugf("collab: ignoring %s", b)
 	}
+	nameEvents(c.vs, events)
 	c.events = events
 	c.prs = collab.Fold(events)
 	return nil
@@ -137,7 +166,7 @@ func (c *prContext) baseSHA(pr *collab.PullRequest) string {
 }
 
 func (c *prContext) append(e *collab.Event) error {
-	e.ActorName = c.r.Cfg.Label
+	e.ActorName = c.r.deviceName(c.vs)
 	if err := c.store.Append(e); err != nil {
 		return err
 	}

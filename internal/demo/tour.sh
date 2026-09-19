@@ -54,7 +54,7 @@ mkdir -p .secretree && mv .secretree_ci_tmp .secretree/ci && chmod +x .secretree
 alice git add -A && alice git commit -qm "initial"
 
 step "2. one command: vault + keys + helper + origin + first push"
-run alice secretree init --vault "$TOUR/vault.git" --label app --kit-out "$TOUR/alice-recovery-kit.txt" --push
+run alice secretree init --vault "$TOUR/vault.git" --label app --name alice --kit-out "$TOUR/alice-recovery-kit.txt" --push
 run alice secretree kit --confirm
 run alice secretree status
 
@@ -63,8 +63,9 @@ run git -C "$TOUR/vault.git" ls-tree -r --name-only HEAD
 run git -C "$TOUR/vault.git" log --format='%h %s' | head -3
 
 step "4. bob joins from his own device"
-run bob secretree join --vault "$TOUR/vault.git" --name bob-laptop --out "$TOUR/bob-join-request.txt"
-run alice secretree member add --request "$TOUR/bob-join-request.txt"
+run bob secretree join --vault "$TOUR/vault.git" --name bob-laptop
+run alice secretree member pending
+run alice secretree member approve bob-laptop
 run alice secretree member list
 mkdir -p "$TOUR/bob" && cd "$TOUR/bob"
 run bob secretree clone "$TOUR/vault.git" app
@@ -109,8 +110,8 @@ run alice secretree pr show 1
 step "7b. an AI review agent joins (role: agent) and reviews through the runner"
 mkdir -p "$TOUR/bot"
 bot() { SECRETREE_HOME="$TOUR/bot-keys" GIT_AUTHOR_NAME=review-bot GIT_AUTHOR_EMAIL=bot@example.com GIT_COMMITTER_NAME=review-bot GIT_COMMITTER_EMAIL=bot@example.com "$@"; }
-run bot secretree join --vault "$TOUR/vault.git" --name review-bot --out "$TOUR/bot-join-request.txt"
-run alice secretree member add --request "$TOUR/bot-join-request.txt" --role agent
+run bot secretree join --vault "$TOUR/vault.git" --name review-bot
+run alice secretree member approve review-bot --role agent
 cd "$TOUR/bot" && run bot secretree clone "$TOUR/vault.git" app
 # a stand-in for a model: agents/review.sh does the same with `claude -p`
 cat > "$TOUR/fake-review.sh" <<'SH'
@@ -132,6 +133,9 @@ run alice secretree pr merge 1
 run alice secretree runner --once
 run alice secretree deploy-agent --to "$TOUR/deployed" --once --cmd 'echo "restarted $(date)" > .deployed-at'
 ls "$TOUR/deployed"
+
+step "8b. a printable recovery kit with QR codes"
+run alice secretree kit --html "$TOUR/alice-recovery-kit.html"
 
 step "9. share a file with someone who has no key; the ledger records it"
 run alice secretree share src/retry.go --note "for the auditor" --out "$TOUR/share.html" | tee "$TOUR/share.log"
@@ -165,11 +169,11 @@ cat <<MSG
 
 Everything is under $TOUR
 
-  UI (alice's view):        http://127.0.0.1:7391          branches, files, blame, search
+  UI (alice's view):        http://127.0.0.1:7391          code, pull requests, activity, ledger, vault
                             http://127.0.0.1:7391/pulls    the merged PR: inline comments (one by the agent), checks, Resolve
   Permalink:                $(alice secretree link src/main.go:6)
   Share page (no key):      file://$TOUR/share.html#$KEY
-  Recovery kit:             $TOUR/alice-recovery-kit.txt
+  Recovery kit:             $TOUR/alice-recovery-kit.txt  (printable: $TOUR/alice-recovery-kit.html)
   The vault as the host:    git -C $TOUR/vault.git ls-tree -r --name-only HEAD
 
 Try next, in $TOUR/bob/app (bob) or $TOUR/alice/app (alice):

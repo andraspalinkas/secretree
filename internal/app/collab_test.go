@@ -15,7 +15,7 @@ func TestPullRequestFlow(t *testing.T) {
 	src := newSource(t, homeA)
 	vaultDir := filepath.Join(homeA, "vault.git")
 	a, out := newApp()
-	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: filepath.Join(homeA, "kit.txt"), Label: "alice"}); err != nil {
+	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: filepath.Join(homeA, "kit.txt"), Label: "alice", Name: "alice"}); err != nil {
 		t.Fatalf("init: %v\n%s", err, out)
 	}
 	// policy: one approval and a green "ci" check
@@ -38,7 +38,7 @@ func TestPullRequestFlow(t *testing.T) {
 	os.MkdirAll(homeB, 0o755)
 	t.Setenv("SECRETREE_HOME", filepath.Join(homeB, "sg"))
 	req := filepath.Join(homeB, "join.txt")
-	if err := a.Join(JoinOptions{VaultURL: vaultDir, Name: "bob", Out: req}); err != nil {
+	if err := a.Join(JoinOptions{VaultURL: vaultDir, Name: "bob", Out: req, NoPush: true}); err != nil {
 		t.Fatalf("join: %v\n%s", err, out)
 	}
 	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))

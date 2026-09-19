@@ -45,7 +45,7 @@ func TestAgentMember(t *testing.T) {
 	src := newSource(t, homeA)
 	vaultDir := filepath.Join(homeA, "vault.git")
 	a, out := newApp()
-	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: filepath.Join(homeA, "kit.txt"), Label: "alice", Push: true}); err != nil {
+	if err := a.Init(InitOptions{Dir: src, VaultURL: vaultDir, KitOut: filepath.Join(homeA, "kit.txt"), Label: "alice", Name: "alice", Push: true}); err != nil {
 		t.Fatalf("init: %v\n%s", err, out)
 	}
 	if err := a.PolicyInit(src, 1, nil); err != nil {
@@ -65,7 +65,7 @@ func TestAgentMember(t *testing.T) {
 	os.MkdirAll(homeBot, 0o755)
 	t.Setenv("SECRETREE_HOME", filepath.Join(homeBot, "sg"))
 	req := filepath.Join(homeBot, "join.txt")
-	if err := a.Join(JoinOptions{VaultURL: vaultDir, Name: "review-bot", Out: req}); err != nil {
+	if err := a.Join(JoinOptions{VaultURL: vaultDir, Name: "review-bot", Out: req, NoPush: true}); err != nil {
 		t.Fatalf("join: %v", err)
 	}
 	t.Setenv("SECRETREE_HOME", filepath.Join(homeA, "sg"))

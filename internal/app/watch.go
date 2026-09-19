@@ -98,6 +98,7 @@ func (a *App) watchPass(r *repo, o WatchOptions, seen map[string]bool) (map[stri
 	if err != nil {
 		return seen, err
 	}
+	nameEvents(vs, events)
 	prs := collab.Fold(events)
 	title := map[string]string{}
 	number := map[string]int{}

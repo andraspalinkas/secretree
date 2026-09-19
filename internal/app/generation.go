@@ -59,6 +59,30 @@ func (a *App) loadVault(r *repo) (*vaultState, error) {
 	return &vaultState{Branch: branch, Meta: meta, Signers: signers, Recipients: recipients, Chain: chain, Reader: reader}, nil
 }
 
+// loadVaultLocal reads the vault from the existing cache without fetching;
+// for cheap UI chrome and offline views.
+func (a *App) loadVaultLocal(r *repo) (*vaultState, error) {
+	if _, err := os.Stat(filepath.Join(r.Paths.Cache, ".git")); err != nil {
+		return nil, errors.New("vault not synced yet")
+	}
+	fp, _ := r.Keys.Fingerprint()
+	reader := &vault.Reader{Dir: r.Paths.Cache, CacheDir: filepath.Join(r.Paths.Root, "manifest-cache", strings.TrimPrefix(fp, "SHA256:"))}
+	pub, _ := r.Keys.PublicKey()
+	meta, signers, err := vault.LoadMeta(reader, pub)
+	if err != nil {
+		return nil, err
+	}
+	recipients, err := crypt.ParseRecipients(meta.Recipients)
+	if err != nil {
+		return nil, err
+	}
+	chain, err := vault.LoadChain(reader, meta.VaultID, r.Cfg.RepoID, r.identity, signers)
+	if err != nil {
+		return nil, err
+	}
+	return &vaultState{Branch: r.Cfg.VaultBranch, Meta: meta, Signers: signers, Recipients: recipients, Chain: chain, Reader: reader}, nil
+}
+
 // genOptions controls writeGeneration.
 type genOptions struct {
 	Source    string // repository to bundle: the work tree or the mirror

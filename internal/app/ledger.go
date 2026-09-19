@@ -117,7 +117,7 @@ func (a *App) appendLedger(r *repo, vs *vaultState, e LedgerEntry) error {
 	if fp, err := r.Keys.Fingerprint(); err == nil {
 		e.Actor = fp
 	}
-	e.ActorName = r.Cfg.Label
+	e.ActorName = r.deviceName(vs)
 	if lastHash != "" {
 		e.PrevSHA256 = &lastHash
 	}

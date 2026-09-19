@@ -35,7 +35,8 @@ type hostFile struct {
 }
 
 type vaultPage struct {
-	page
+	chrome
+	Title      string
 	Ledger     []ledgerRow
 	Gens       []genRow
 	Files      []hostFile
@@ -66,7 +67,7 @@ func (s *uiServer) ledger(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	p := &vaultPage{page: page{Kind: "ledger", Title: "disclosure ledger"}}
+	p := &vaultPage{chrome: chrome{Kind: "ledger"}, Title: "disclosure ledger"}
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
 		row := ledgerRow{Seq: e.Seq, When: e.Created.Format("2006-01-02 15:04"), Kind: e.Kind, Subject: e.Subject, Actor: e.ActorName, Note: e.Note}
@@ -93,7 +94,7 @@ func (s *uiServer) vault(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	p := &vaultPage{page: page{Kind: "vault", Title: "vault"}, VaultURL: rp.Cfg.VaultURL, VaultID: vs.Meta.VaultID,
+	p := &vaultPage{chrome: chrome{Kind: "vault"}, Title: "vault", VaultURL: rp.Cfg.VaultURL, VaultID: vs.Meta.VaultID,
 		Members: len(vs.Meta.Recipients), Signers: len(vs.Signers.Active), TotalSize: humanBytes(vs.Chain.Bytes())}
 	for _, g := range vs.Chain.Gens {
 		row := genRow{Num: g.Num, Opaque: g.Opaque()}
@@ -126,7 +127,7 @@ func (s *uiServer) vault(w http.ResponseWriter, r *http.Request) {
 	if raw, err := vs.Reader.ReadFile(vault.MetaFile); err == nil {
 		p.Meta = string(raw)
 	}
-	if st, err := loadStatusFor(rp); err == nil {
+	if st, err := config.LoadStatus(rp.Paths); err == nil {
 		p.LastBackup = agoShort(st.LastBackup)
 		p.LastProof = agoShort(st.LastProof)
 		p.KitPending = st.KitPending && st.KitConfirmed == nil
@@ -135,10 +136,11 @@ func (s *uiServer) vault(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *uiServer) renderVault(w http.ResponseWriter, p *vaultPage) {
-	p.Repo, p.Source = s.name, s.source
-	p.Proof, p.ProofOK = s.proofBadge()
+	kind := p.Kind
+	p.chrome = s.chrome(kind)
+	p.Kind = kind
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'")
+	w.Header().Set("Content-Security-Policy", uiCSP)
 	if err := vaultTmpl.Execute(w, p); err != nil {
 		http.Error(w, err.Error(), 500)
 	}
@@ -146,63 +148,47 @@ func (s *uiServer) renderVault(w http.ResponseWriter, p *vaultPage) {
 
 var vaultTmpl = template.Must(template.New("vault").Parse(`<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Repo}}: {{.Title}}</title>
-` + uiCSS + `<style>
-.stat{display:inline-block;margin:0 18px 8px 0}.stat b{display:block;font-size:20px;font-weight:600}.stat span{color:var(--fg2);font-size:12px}
-.kind{display:inline-block;padding:0 6px;border-radius:8px;font-size:11px;background:var(--bg2);border:1px solid var(--line)}
-.kind.share{border-color:var(--purple);color:var(--purple)}.kind.export{border-color:var(--warn);color:var(--warn)}.kind.public-mirror{border-color:var(--bad);color:var(--bad)}
-pre.meta{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:10px;font-size:12px;overflow:auto}
-.expired{color:var(--fg2);text-decoration:line-through}
-</style>
+` + uiCSS + `<style>pre.meta{background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px;overflow:auto;margin:0}.expired{color:var(--fg3);text-decoration:line-through}</style>
 ` + uiHeader + `
 <main>
 {{if eq .Kind "ledger"}}
-<h3>Disclosure ledger</h3>
-<p class="muted">Everything that ever left the key boundary on purpose: share pages, exports to services, public mirrors. Each entry is encrypted to the members, signed by the device that made it, and hash-chained to the previous one, so the list can be neither forged nor silently trimmed.</p>
-{{if .Ledger}}<table><tr><th>#</th><th>when</th><th>kind</th><th>what left</th><th>by</th><th>expires</th><th>why</th></tr>
-{{range .Ledger}}<tr><td class="muted">{{printf "%06d" .Seq}}</td><td>{{.When}}</td><td><span class="kind {{.Kind}}">{{.Kind}}</span></td><td class="cipher">{{.Subject}}</td><td>{{.Actor}}</td><td{{if .Expired}} class="expired"{{end}}>{{.Expires}}</td><td class="muted">{{.Note}}</td></tr>{{end}}</table>
-{{else}}<div class="box"><b>Nothing has left the vault in plaintext.</b> <span class="muted">No share pages, no exports. When a member runs <code>secretree share</code> or an agent sends a diff to a model, it will be listed here.</span></div>{{end}}
+<h1>Disclosure ledger</h1>
+<p class="lead">Everything that ever left the key boundary on purpose: share pages, exports to services, public mirrors. Each entry is encrypted to the members, signed by the device that made it and hash-chained to the previous one, so the list can be neither forged nor silently trimmed.</p>
+<div class="card">{{if .Ledger}}<table><tr><th>#</th><th>when</th><th>kind</th><th>what left</th><th>by</th><th>expires</th><th>why</th></tr>
+{{range .Ledger}}<tr><td class="muted">{{printf "%06d" .Seq}}</td><td>{{.When}}</td><td><span class="pill {{.Kind}}">{{.Kind}}</span></td><td class="cipher">{{.Subject}}</td><td>{{.Actor}}</td><td{{if .Expired}} class="expired"{{end}}>{{.Expires}}</td><td class="muted">{{.Note}}</td></tr>{{end}}</table>
+{{else}}<div class="empty"><b>Nothing has left the vault in plaintext</b>No share pages, no exports. When a member runs <code>secretree share</code> or an agent sends a diff to a model, it is listed here.</div>{{end}}</div>
 {{end}}
+
 {{if eq .Kind "vault"}}
-<h3>The vault as the host sees it</h3>
-<div class="box">
+<h1>The vault as the host sees it</h1>
+<p class="lead">{{.VaultURL}} · vault id <span class="mono">{{.VaultID}}</span></p>
+{{if .KitPending}}<div class="note" style="margin-bottom:14px">The recovery kit of this vault has not been confirmed as printed. Without it a lost machine means lost backups. <code>secretree kit --html</code>, print, then <code>secretree kit --confirm</code>.</div>{{end}}
+<div class="card"><div class="bd stats">
 <div class="stat"><b>{{len .Gens}}</b><span>generations</span></div>
 <div class="stat"><b>{{.TotalSize}}</b><span>ciphertext on the remote</span></div>
 <div class="stat"><b>{{.Members}}</b><span>recipients</span></div>
 <div class="stat"><b>{{.Signers}}</b><span>signers</span></div>
 <div class="stat"><b>{{.LastBackup}}</b><span>last backup</span></div>
 <div class="stat"><b>{{.LastProof}}</b><span>last restore proof</span></div>
-<div class="muted">{{.VaultURL}} · vault id {{.VaultID}}</div>
-{{if .KitPending}}<p class="block" style="margin:10px 0 0">The recovery kit of this vault has not been confirmed as printed. <code>secretree kit --confirm</code></p>{{end}}
-</div>
-<div class="two">
+</div></div>
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-top:14px">
 <div>
-<h4>Files on the remote</h4>
-<p class="muted">Real listing of the vault repository. Nothing here is readable without a member's key; the names carry only generation numbers.</p>
-<table><tr><th>path</th><th>size</th></tr>{{range .Files}}<tr><td class="cipher">{{.Path}}</td><td class="muted">{{.Size}}</td></tr>{{end}}</table>
+<h2>Files on the remote</h2>
+<p class="muted small">Real listing of the vault repository. Nothing here is readable without a member's key; the names carry only generation numbers.</p>
+<div class="card"><table><tr><th>path</th><th>size</th></tr>{{range .Files}}<tr><td class="cipher">{{.Path}}</td><td class="muted" style="white-space:nowrap">{{.Size}}</td></tr>{{end}}</table></div>
 </div>
 <div>
-<h4>Generations</h4>
-<table><tr><th>#</th><th>kind</th><th>written</th><th>refs</th><th>size</th></tr>
-{{range .Gens}}<tr><td class="muted">{{printf "%06d" .Num}}</td>{{if .Opaque}}<td colspan="4" class="muted">opaque: written before this key was a member (signature and chain verified)</td>{{else}}<td>{{.Kind}}</td><td>{{.When}}</td><td>{{.Refs}}</td><td class="muted">{{.Size}}</td>{{end}}</tr>{{end}}</table>
-<h4>vault.json (the only plaintext metadata)</h4>
-<pre class="meta">{{.Meta}}</pre>
+<h2>Generations</h2>
+<div class="card"><table><tr><th>#</th><th>kind</th><th>written</th><th>refs</th><th>size</th></tr>
+{{range .Gens}}<tr><td class="muted">{{printf "%06d" .Num}}</td>{{if .Opaque}}<td colspan="4" class="muted">opaque: written before this key was a member (signature and chain verified)</td>{{else}}<td>{{.Kind}}</td><td>{{.When}}</td><td>{{.Refs}}</td><td class="muted">{{.Size}}</td>{{end}}</tr>{{end}}</table></div>
+<h2>vault.json</h2>
+<p class="muted small">The only plaintext metadata: public keys of recipients and signers.</p>
+<div class="card"><pre class="meta">{{.Meta}}</pre></div>
 </div>
 </div>
 {{end}}
 </main>
 `))
-
-func loadStatusFor(r *repo) (*statusView, error) {
-	st, err := configLoadStatus(r)
-	if err != nil {
-		return nil, err
-	}
-	return st, nil
-}
-
-type statusView = config.Status
-
-func configLoadStatus(r *repo) (*config.Status, error) { return config.LoadStatus(r.Paths) }
 
 func agoShort(t *time.Time) string {
 	if t == nil {
